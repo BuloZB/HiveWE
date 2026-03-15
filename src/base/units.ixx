@@ -1,6 +1,7 @@
 module;
 
 #include <QRect>
+#include <absl/strings/str_split.h>
 
 export module Units;
 
@@ -101,7 +102,8 @@ export class Units {
 	static constexpr int write_subversion = 11;
 
 	//static constexpr int mod_table_write_version = 2;
-public:
+
+  public:
 	std::vector<Unit> units;
 	std::vector<Unit> items;
 
@@ -114,13 +116,15 @@ public:
 		}
 		const uint32_t version = reader.read<uint32_t>();
 		if (version != 7 && version != 8) {
-			std::cout << "Unknown war3mapUnits.doo version: " << version << " Attempting to load but may crash\nPlease send this map to eejin\n";
+			std::cout << "Unknown war3mapUnits.doo version: " << version
+					  << " Attempting to load but may crash\nPlease send this map to eejin\n";
 		}
 
 		// Subversion
 		const int subversion = reader.read<uint32_t>();
 		if (subversion != 9 && subversion != 11) {
-			std::cout << "Unknown war3mapUnits.doo subversion: " << subversion << " Attempting to load but may crash\nPlease send this map to eejin\n";
+			std::cout << "Unknown war3mapUnits.doo subversion: " << subversion
+					  << " Attempting to load but may crash\nPlease send this map to eejin\n";
 		}
 
 		const int unit_count = reader.read<uint32_t>();
@@ -158,7 +162,7 @@ public:
 			i.item_sets.resize(reader.read<uint32_t>());
 			for (auto&& j : i.item_sets) {
 				j.items.resize(reader.read<uint32_t>());
-				for (auto&&[chance, id] : j.items) {
+				for (auto&& [chance, id] : j.items) {
 					id = reader.read_string(4);
 					chance = reader.read<uint32_t>();
 				}
@@ -182,10 +186,10 @@ public:
 			}
 
 			i.abilities.resize(reader.read<uint32_t>());
-			for (auto&&[id, autocast, level] : i.abilities) {
+			for (auto&& [id, autocast, level] : i.abilities) {
 				id = reader.read_string(4);
 				autocast = reader.read<uint32_t>();
-				level =  reader.read<uint32_t>();
+				level = reader.read<uint32_t>();
 			}
 
 			i.random_type = reader.read<uint32_t>();
@@ -250,7 +254,7 @@ public:
 				writer.write<uint32_t>(i.item_sets.size());
 				for (auto&& j : i.item_sets) {
 					writer.write<uint32_t>(j.items.size());
-					for (auto&&[chance, id] : j.items) {
+					for (auto&& [chance, id] : j.items) {
 						writer.write_string(id);
 						writer.write<uint32_t>(chance);
 					}
@@ -263,15 +267,14 @@ public:
 				writer.write<uint32_t>(i.agility);
 				writer.write<uint32_t>(i.intelligence);
 
-
 				writer.write<uint32_t>(i.items.size());
-				for (auto&&[slot, id] : i.items) {
+				for (auto&& [slot, id] : i.items) {
 					writer.write<uint32_t>(slot);
 					writer.write_string(id);
 				}
 
 				writer.write<uint32_t>(i.abilities.size());
-				for (auto&&[id, autocast, level] : i.abilities) {
+				for (auto&& [id, autocast, level] : i.abilities) {
 					writer.write_string(id);
 					writer.write<uint32_t>(autocast);
 					writer.write<uint32_t>(level);
@@ -307,13 +310,13 @@ public:
 			}
 
 			i.mesh = get_mesh(i.id);
-			i.skeleton = SkeletalModelInstance(i.mesh->mdx);
+			i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
 			i.update();
 		}
 
 		for (auto& i : items) {
 			i.mesh = get_mesh(i.id);
-			i.skeleton = SkeletalModelInstance(i.mesh->mdx);
+			i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
 			i.update();
 		}
 	}
@@ -329,9 +332,9 @@ public:
 		unit.position = position;
 		unit.scale = glm::vec3(1.f);
 		unit.angle = 0.f;
-		unit.random = { 1, 0, 0, 0 };
+		unit.random = {1, 0, 0, 0};
 		unit.creation_number = ++Unit::auto_increment;
-		unit.skeleton = SkeletalModelInstance(unit.mesh->mdx);
+		unit.skeleton = SkeletalModelInstance(unit.mesh->mdx, get_required_animation_names(id));
 		unit.update();
 
 		return units.back();
@@ -348,7 +351,8 @@ public:
 		units.erase(iterator);
 	}
 
-	[[nodiscard]] std::vector<Unit*> query_area(const QRectF& area) {
+	[[nodiscard]]
+	std::vector<Unit*> query_area(const QRectF& area) {
 		std::vector<Unit*> result;
 
 		for (auto& i : units) {
@@ -365,13 +369,19 @@ public:
 		});
 	}
 
+	void remove_items(const std::unordered_set<Unit*>& list) {
+		std::erase_if(items, [&](Unit& item) {
+			return list.contains(&item);
+		});
+	}
+
 	void process_unit_field_change(const std::string& id, const std::string& field) {
-		if (field == "file") {
+		if (field == "file" || field == "attachmentlinkprops") {
 			id_to_mesh.erase(id);
 			for (auto& i : units) {
 				if (i.id == id) {
 					i.mesh = get_mesh(id);
-					i.skeleton = SkeletalModelInstance(i.mesh->mdx);
+					i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(id));
 					i.update();
 				}
 			}
@@ -426,5 +436,11 @@ public:
 		id_to_mesh.emplace(id, resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt));
 
 		return id_to_mesh[id];
+	}
+
+	static std::vector<std::string> get_required_animation_names(const std::string& id) {
+		std::string animation_names_string = units_slk.data("attachmentlinkprops", id);
+		to_lowercase(animation_names_string);
+		return absl::StrSplit(animation_names_string, ",", absl::SkipEmpty());
 	}
 };
