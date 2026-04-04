@@ -35,6 +35,8 @@ export class DoodadTreeModel : public BaseTreeModel {
 		if (const auto found = categories.find(category.front()); found != categories.end()) {
 			return found->second.item;
 		}
+
+		return categories.begin()->second.item;
 	}
 
   public:

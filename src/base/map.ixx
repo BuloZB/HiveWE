@@ -45,6 +45,11 @@ import <glm/gtc/matrix_transform.hpp>;
 namespace fs = std::filesystem;
 using namespace std::literals::string_literals;
 
+export struct FileUsage {
+	std::string path;
+	std::unordered_set<std::string> used_by; // empty = unused
+};
+
 export class Map: public QObject {
 	Q_OBJECT
 
@@ -811,7 +816,7 @@ export class Map: public QObject {
 		return id;
 	}
 
-	void find_unused_files() const {
+	std::vector<FileUsage> find_unused_files() const {
 		// First, get all .MDX files referenced by the map
 		// Then load each of them and save the resources references by them
 		// Deal with game overrides somehow
@@ -891,17 +896,6 @@ export class Map: public QObject {
 			resources[path].insert(values.begin(), values.end());
 		}
 
-		for (const auto& [path, values] : resources) {
-			std::print("{} used by ", path);
-			for (const auto& id : values) {
-				std::print("{} ", id);
-			}
-			std::println();
-		}
-
-		std::println();
-		std::println();
-
 		std::unordered_set<std::string> files;
 
 		for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
@@ -932,11 +926,19 @@ export class Map: public QObject {
 			map_script = std::string(a.buffer.begin(), a.buffer.end());
 		}
 
+		std::vector<FileUsage> result;
+		result.reserve(files.size());
 		for (const auto& file : files) {
-			if (!resources.contains(file) && !map_script.contains(file)) {
-				std::println("{} ", file);
+			FileUsage usage;
+			usage.path = file;
+			if (resources.contains(file)) {
+				usage.used_by = resources.at(file);
+			} else if (!map_script.empty() && map_script.contains(file)) {
+				usage.used_by.emplace("map script");
 			}
+			result.push_back(std::move(usage));
 		}
+		return result;
 	}
 
   private:

@@ -136,6 +136,9 @@ target_sources(HiveWE PRIVATE
 	"menus/gameplay_constants_editor.cpp"
 	"menus/gameplay_constants_editor.h"
 
+	"asset_manager/asset_manager.cpp"
+	"asset_manager/asset_manager.h"
+
 	"models/single_model.cpp"
 	
 	"custom_widgets/aspect_ratio_pixmap_label.h"
