@@ -22,7 +22,7 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	selection_section->setText("Selection");
 
 	selection_mode->setText("Selection\nMode");
-	selection_mode->setIcon(QIcon("data/icons/Ribbon/select32x32.png"));
+	selection_mode->setIcon(QIcon("data/icons/Ribbon/select.png"));
 	selection_mode->setCheckable(true);
 	selection_mode->setEnabled(false);
 	selection_section->addWidget(selection_mode);

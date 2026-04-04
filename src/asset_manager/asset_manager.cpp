@@ -1,6 +1,7 @@
 #include "asset_manager.h"
 
 #include <QApplication>
+#include <QSizePolicy>
 #include <QFileIconProvider>
 #include <QHBoxLayout>
 #include <QMenu>
@@ -171,9 +172,10 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	search_edit->setPlaceholderText("Search files...");
 	search_bar->addWidget(search_edit);
 
-	auto* refresh_button = new QPushButton("", this);
+	auto* refresh_button = new QPushButton(this);
 	refresh_button->setIcon(QIcon("data/icons/asset_manager/refresh.png"));
-	refresh_button->setIconSize(QSize(20, 20));
+	refresh_button->setIconSize(QSize(16, 16));
+	refresh_button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 	search_bar->addWidget(refresh_button);
 
 	auto* info_button = new QLabel(this);

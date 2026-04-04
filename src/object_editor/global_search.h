@@ -29,9 +29,9 @@ public:
 
 	explicit ActionListModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
 		items = {
-			{"Open Object Editor", QIcon("data/icons/ribbon/objecteditor32x32.png")},
+			{"Open Object Editor", QIcon("data/icons/ribbon/objecteditor.png")},
 			{"Open Model Editor", QIcon("data/icons/ribbon/model_editor.png")},
-			{"Open Trigger Editor", QIcon("data/icons/ribbon/triggereditor32x32.png")}
+			{"Open Trigger Editor", QIcon("data/icons/ribbon/triggereditor.png")}
 		};
 	}
 

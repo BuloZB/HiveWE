@@ -96,12 +96,12 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	selection_section->setText("Selection");
 
 	selection_mode->setText("Selection\nMode");
-	selection_mode->setIcon(QIcon("data/icons/ribbon/select32x32.png"));
+	selection_mode->setIcon(QIcon("data/icons/ribbon/select.png"));
 	selection_mode->setCheckable(true);
 	selection_section->addWidget(selection_mode);
 
 	// selections_button->setText("View\nSelections");
-	// selections_button->setIcon(QIcon("data/icons/ribbon/description32x32.png.png"));
+	// selections_button->setIcon(QIcon("data/icons/ribbon/description.png.png"));
 	// selection_section->addWidget(selections_button);
 
 	// QVBoxLayout* selection_choices_layout = new QVBoxLayout;
@@ -127,7 +127,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	QRibbonButton* random_rotation = new QRibbonButton;
 	random_rotation->setText("Random\nRotation");
 	random_rotation->setToolTip("Placed doodads will get a random rotation as long as their properties allow it");
-	random_rotation->setIcon(QIcon("data/icons/ribbon/reset32x32.png"));
+	random_rotation->setIcon(QIcon("data/icons/ribbon/reset.png"));
 	random_rotation->setCheckable(true);
 	random_rotation->setChecked(true);
 	placement_section->addWidget(random_rotation);
@@ -135,7 +135,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	QRibbonButton* random_scale = new QRibbonButton;
 	random_scale->setText("Random\nScale");
 	random_scale->setToolTip("Placed doodads will get a random scale each time between their minScale and maxScale");
-	random_scale->setIcon(QIcon("data/icons/ribbon/scale32x32.png"));
+	random_scale->setIcon(QIcon("data/icons/ribbon/scale.png"));
 	random_scale->setCheckable(true);
 	random_scale->setChecked(true);
 	placement_section->addWidget(random_scale);
@@ -153,7 +153,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	QRibbonButton* random_variation = new QRibbonButton;
 	random_variation->setText("Random\nVariation");
 	random_variation->setToolTip("Placed doodads will get a random variation. You can control which ones on the right ->");
-	random_variation->setIcon(QIcon("data/icons/ribbon/variation32x32.png"));
+	random_variation->setIcon(QIcon("data/icons/ribbon/variation.png"));
 	random_variation->setCheckable(true);
 	random_variation->setChecked(true);
 	variation_section->addWidget(random_variation);
@@ -243,12 +243,12 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 
 	QSmallRibbonButton* edit_in_oe = new QSmallRibbonButton;
 	edit_in_oe->setText("Edit in OE");
-	edit_in_oe->setIcon(QIcon("data/icons/ribbon/objecteditor32x32.png"));
+	edit_in_oe->setIcon(QIcon("data/icons/ribbon/objecteditor.png"));
 
 	QSmallRibbonButton* select_in_palette = new QSmallRibbonButton;
 	select_in_palette->setText("Select in Palette");
 	select_in_palette->setToolTip("Or click the doodad with middle mouse button");
-	select_in_palette->setIcon(QIcon("data/icons/ribbon/doodads32x32.png"));
+	select_in_palette->setIcon(QIcon("data/icons/ribbon/doodads.png"));
 
 	QVBoxLayout* info_layout = new QVBoxLayout;
 	info_layout->addWidget(selection_name);
