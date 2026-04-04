@@ -774,7 +774,7 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	const Regions& regions,
 	const GameCameras& cameras,
 	ScriptMode mode
-) {
+) const {
 	std::unordered_map<std::string, std::string> unit_variables; // creation_number, unit_id
 	std::unordered_map<std::string, std::string> destructable_variables; // creation_number, destructable_id
 	std::vector<std::string> initialization_triggers;

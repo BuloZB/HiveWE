@@ -12,12 +12,13 @@ namespace fs = std::filesystem;
 export class Imports {
   public:
 
-	std::unordered_set<std::string> blacklist = {
+	const std::unordered_set<std::string> blacklist = {
 		"conversation.json",
 		"war3mapUnits.doo",
 		"war3map.doo",
 		"war3map.imp",
 		"war3map.j",
+		"war3map.lua",
 		"war3map.mmp",
 		"war3map.shd",
 		"war3map.w3a",
@@ -39,7 +40,15 @@ export class Imports {
 		"war3mapMap.blp",
 		"war3mapExtra.txt",
 		"war3mapMisc.txt",
-		"war3mapSkin.txt"
+		"war3mapSkin.txt",
+		"war3mapSkin.w3a",
+		"war3mapSkin.w3b",
+		"war3mapSkin.w3d",
+		"war3mapSkin.w3h",
+		"war3mapSkin.w3q",
+		"war3mapSkin.w3t",
+		"war3mapSkin.w3u",
+		"war3mapPreview.tga",
 	};
 
 	/// Requires the filesystem_path for the map to make the saved paths lexically relative

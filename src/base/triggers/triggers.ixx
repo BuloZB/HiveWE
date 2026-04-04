@@ -940,7 +940,7 @@ export class Triggers {
 	}
 
 	/// Returns compile output which could contain errors or general information
-	std::expected<void, std::string> generate_map_script(
+	[[nodiscard]] std::expected<void, std::string> generate_map_script(
 		const Terrain& terrain,
 		const Units& units,
 		const Doodads& doodads,
@@ -949,5 +949,5 @@ export class Triggers {
 		const Regions& regions,
 		const GameCameras& cameras,
 		ScriptMode mode
-	);
+	) const;
 };
