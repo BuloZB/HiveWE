@@ -3,7 +3,9 @@ target_sources(HiveWE PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"map_global.ixx"
 	"globals.ixx"
 
-	"base/map.ixx"
+	"base/map/map.ixx"
+	"base/map/resize.cpp"
+	"base/map/unused_files.cpp"
 	"base/binary_reader.ixx"
 	"base/doodad.ixx"
 	"base/doodads.ixx"

@@ -242,7 +242,7 @@ void AssetManager::refresh() const {
 	tree_view->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	tree_view->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
-	auto results = map->find_unused_files();
+	auto results = map->get_file_usage();
 
 	// Sort: unused files first, then alphabetically within each group
 	std::ranges::sort(results, [](const FileUsage& a, const FileUsage& b) {

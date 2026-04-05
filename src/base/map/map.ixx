@@ -735,67 +735,12 @@ export class Map: public QObject {
 	/// Resizes the entire map by expanding/shirnking it from all sides
 	/// Handles terrain, pathing map, shadow map and preplaced objects
 	/// Also, as per vanilla WE behaviour, clears the entire world undo stack
-	void resize(int delta_left, int delta_right, int delta_top, int delta_bottom) {
-		terrain.resize(delta_left, delta_right, delta_top, delta_bottom, physics);
-
-		// update the pathing and shadow maps to the new size
-		pathing_map.resize(delta_left * 4, delta_right * 4, delta_top * 4, delta_bottom * 4);
-		shadow_map.resize(delta_left * 4, delta_right * 4, delta_top * 4, delta_bottom * 4);
-
-		// update object positions
-		update_object_positions(delta_left, delta_right, delta_top, delta_bottom);
-
-		// vanilla WE behaviour: clear unit/doodad/terrain undo
-		world_undo.clear_all_undo();
-
-		// since this function does not change playable area, we have to update the map info accordingly
-		info.camera_complements[0] += delta_left;
-		info.camera_complements[1] += delta_right;
-		info.camera_complements[2] += delta_bottom;
-		info.camera_complements[3] += delta_top;
-
-		// finally, move the camera
-		camera.position.x += delta_left / 2;
-		camera.position.y += delta_bottom / 2;
-		camera.update(0.0);
-	}
+	void resize(int delta_left, int delta_right, int delta_top, int delta_bottom);
 
 	/// Sets the playable area (shadowed map bounds)
 	/// Handles the terrain flags, camera bounds and map info
 	/// Also updates the pathing map and deletes units/items which are now out of bounds
-	void set_playable_area(int unplayable_left, int unplayable_right, int unplayable_top, int unplayable_bottom) {
-		// apply the shadowed camera boundaries on the edges
-		terrain.set_unplayable_boundaries(unplayable_left, unplayable_right, unplayable_top, unplayable_bottom);
-
-		// reset the pathing map - old unplayable segments should
-		// no longer be unwalkable/unflyable/unbuildable
-		int old_left = info.camera_complements[0];
-		int old_right = info.camera_complements[1];
-		int old_bottom = info.camera_complements[2];
-		int old_top = info.camera_complements[3];
-		reset_map_edge_pathing(
-			old_left,
-			old_right,
-			old_top,
-			old_bottom,
-			unplayable_left,
-			unplayable_right,
-			unplayable_top,
-			unplayable_bottom
-		);
-
-		// update map info
-		info.update_map_bounds_info(
-			unplayable_left,
-			unplayable_right,
-			unplayable_top,
-			unplayable_bottom,
-			terrain.width,
-			terrain.height,
-			terrain.offset.x,
-			terrain.offset.y
-		);
-	}
+	void set_playable_area(int unplayable_left, int unplayable_right, int unplayable_top, int unplayable_bottom);
 
 	std::string get_unique_id(bool first_uppercase) {
 		std::random_device rd;
@@ -816,227 +761,14 @@ export class Map: public QObject {
 		return id;
 	}
 
-	std::vector<FileUsage> find_unused_files() const {
-		// First, get all .MDX files referenced by the map
-		// Then load each of them and save the resources references by them
-		// Deal with game overrides somehow
-
-		hive::unordered_map<std::string, std::unordered_set<std::string>> resources;
-
-		auto normalize_path = [&](const std::string& path) {
-			auto path_copy = path;
-			if (path_copy.ends_with(".mdl")) {
-				path_copy = path.substr(0, path.size() - 4) + ".mdx";
-			}
-			normalize_path_to_forward_slash(path_copy);
-			return path_copy;
-		};
-
-		auto find_references = [&](const slk::SLK& slk, const std::vector<std::string>& keys) {
-			for (const auto& [id, values] : slk.shadow_data) {
-				for (const auto& key : keys) {
-					if (auto found = values.find(key); found != values.end()) {
-						resources[normalize_path(found->second)].emplace(id);
-					}
-				}
-			}
-		};
-
-		find_references(units_slk, {"file", "portrait", "specialart", "missileart1", "missileart2", "art", "pathtex"});
-		find_references(items_slk, {"file", "art"});
-		find_references(destructibles_slk, {"file", "pathtex", "pathtexdeath"});
-		find_references(doodads_slk, {"file", "pathtex"});
-		find_references(abilities_slk, {"targetart", "effectart", "specialart", "art", "researchart"});
-		find_references(buff_slk, {"targetart", "missileart", "specialart", "buffart"});
-		// Todo, all icon levels
-		// find_references(upgrade_slk, {"file"});
-
-		if (!info.loading_screen_model.empty() && info.loading_screen_number == -1) {
-			resources[normalize_path(info.loading_screen_model)].emplace("loadingscreen");
-		}
-
-		for (const auto& i : sounds.sounds) {
-			resources[normalize_path(i.file)].emplace(i.name);
-		}
-
-		hive::unordered_map<std::string, std::unordered_set<std::string>> referenced_resources;
-		// Add files references by MDXs
-		for (const auto& [path, values] : resources) {
-			if (!path.ends_with(".mdx")) {
-				continue;
-			}
-
-			mdx::MDX mdx;
-			try {
-				auto mdx_content = hierarchy.open_file(path);
-				if (!mdx_content) {
-					std::println("Error loading mdx: {} with error: {}", path, mdx_content.error());
-					continue;
-				}
-				mdx = mdx::MDX(mdx_content.value());
-			} catch (const std::exception& e) {
-				std::println("Exception loading mdx: {} with error: {}", path, e.what());
-				continue;
-			}
-
-			for (const auto& texture : mdx.textures) {
-				referenced_resources[normalize_path(texture.file_name.string())].emplace(path);
-			}
-
-			for (const auto& attachment : mdx.attachments) {
-				referenced_resources[normalize_path(attachment.path)].emplace(path);
-			}
-
-			for (const auto& emitter : mdx.emitters1) {
-				referenced_resources[normalize_path(emitter.path)].emplace(path);
-			}
-		}
-
-		for (const auto& [path, values] : referenced_resources) {
-			resources[path].insert(values.begin(), values.end());
-		}
-
-		std::unordered_set<std::string> files;
-
-		for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
-			if (i.is_regular_file()) {
-				auto new_path = i.path();
-				std::string path = new_path.lexically_relative(filesystem_path).string();
-				std::string file_name = i.path().filename().string();
-				if (imports.blacklist.contains(file_name)) {
-					continue;
-				}
-				files.emplace(normalize_path(path));
-			}
-		}
-
-		std::string script_file_name;
-		if (info.lua) {
-			script_file_name = "war3map.lua";
-		} else {
-			script_file_name = "war3map.j";
-		}
-
-		auto binary = read_file(filesystem_path / script_file_name);
-		std::string map_script;
-		if (!binary) {
-			std::println("Error reading map script. Save your map first.");
-		} else {
-			auto a = binary.value();
-			map_script = std::string(a.buffer.begin(), a.buffer.end());
-		}
-
-		std::vector<FileUsage> result;
-		result.reserve(files.size());
-		for (const auto& file : files) {
-			FileUsage usage;
-			usage.path = file;
-			if (resources.contains(file)) {
-				usage.used_by = resources.at(file);
-			} else if (!map_script.empty() && map_script.contains(file)) {
-				usage.used_by.emplace("map script");
-			}
-			result.push_back(std::move(usage));
-		}
-		return result;
-	}
+	/// Returns a list containing all the custom resources in the map folder with how many times they are referenced.
+	/// Note that this isn't exhaustive as we cannot detect confidently whether all game file overrides are used.
+	/// We also scan the map code for the file path (with forward slashed),
+	/// but map code can do arbitrary file loading in ways that are hard to detect such as composing a file path by appending two strings
+	std::vector<FileUsage> get_file_usage() const;
 
   private:
-	/// called when resizing the map
-	/// in HiveWE objeccts positions are saved relative to the bottom-left corner of the terrain
-	/// resizing the map may nudge all preplaced objeccts (units, doodads...)
-	/// calling this function will restore original positions after the resize
-	/// also, if will delete objects which are now out of bounds
-	int update_object_positions(int delta_left, int delta_right, int delta_top, int delta_bottom) {
-		size_t num_deleted = 0;
-
-		// terrain is already resized here
-		const int width = terrain.width - 1;
-		const int height = terrain.height - 1;
-
-		// helper to update positions and collect out-of-bounds objects for removal
-		auto update_and_collect = [&](auto& container, auto&& update_func) {
-			using ObjectType = std::decay_t<decltype(*container.begin())>;
-			using PointerType = std::remove_reference_t<ObjectType>*;
-			std::unordered_set<PointerType> to_delete;
-
-			for (auto& obj : container) {
-				// update the object position relative to the change in bottom-left corner
-				obj.position.x += delta_left;
-				obj.position.y += delta_bottom;
-
-				// check if the object is outside map bounds
-				if (obj.position.x < 0 || obj.position.y < 0 || obj.position.x > width || obj.position.y > height) {
-					to_delete.insert(&obj);
-					++num_deleted;
-				} else {
-					// update rendered object position
-					update_func(obj);
-				}
-			}
-
-			return to_delete;
-		};
-
-		// fix/remove all objects
-		units.remove_units(update_and_collect(units.units, [](auto& obj) {
-			obj.update();
-		}));
-
-		units.remove_items(update_and_collect(units.items, [](auto& obj) {
-			obj.update();
-		}));
-
-		doodads.remove_doodads(update_and_collect(doodads.doodads, [&](auto& obj) {
-			obj.update(terrain);
-		}));
-
-		doodads.remove_special_doodads(update_and_collect(doodads.special_doodads, [&](auto& obj) {
-			obj.update(terrain);
-		}));
-
-		// fix and remove cameras
-		std::unordered_set<GameCamera*> cameras_to_delete;
-		for (GameCamera& camera : cameras.cameras) {
-			// update the camera position
-			camera.target_x += delta_left;
-			camera.target_y += delta_bottom;
-
-			// check if the camera is outside map bounds
-			if (camera.target_x < 0 || camera.target_y < 0 || camera.target_x > width || camera.target_y > height) {
-				cameras_to_delete.insert(&camera);
-				++num_deleted;
-			} else {
-				// todo: uncomment once implemented
-				// camera.update()
-			}
-		}
-		cameras.remove_cameras(cameras_to_delete);
-
-		// fix and remove regions
-		std::unordered_set<Region*> regions_to_delete;
-		for (Region& region : regions.regions) {
-			// update the region position
-			region.left = std::max(region.left + delta_left, 0.f);
-			region.right = std::min(region.right + delta_left, float(width));
-			region.bottom = std::max(region.bottom + delta_bottom, 0.f);
-			region.top = std::min(region.top + delta_bottom, float(height));
-
-			// check if the region was destroyed by the resize operation
-			if (region.right <= region.left || region.top <= region.bottom) {
-				regions_to_delete.insert(&region);
-				++num_deleted;
-			} else {
-				// todo: uncomment once implemented
-				// region.update()
-			}
-		}
-		regions.remove_regions(regions_to_delete);
-
-		return num_deleted;
-	}
-
-	/// Recomputes the terrain pathing on the edges of the map
+	int update_object_positions(int delta_left, int delta_right, int delta_top, int delta_bottom);
 	void reset_map_edge_pathing(
 		int old_left,
 		int old_right,
@@ -1046,43 +778,7 @@ export class Map: public QObject {
 		int new_right,
 		int new_top,
 		int new_bottom
-	) {
-		int width = (terrain.width - 1) * 4;
-		int height = (terrain.height - 1) * 4;
-
-		// old unplayable segments (on the pathing map)
-		int old_left_p = old_left * 4;
-		int old_right_p = old_right * 4;
-		int old_bottom_p = old_bottom * 4;
-		int old_top_p = old_top * 4;
-
-		// new unplayable segments (on the pathing map)
-		int new_left_p = new_left * 4;
-		int new_right_p = new_right * 4;
-		int new_bottom_p = new_bottom * 4;
-		int new_top_p = new_top * 4;
-
-		constexpr uint8_t edge_pathing = PathingMap::unwalkable | PathingMap::unflyable | PathingMap::unbuildable;
-
-		for (size_t i = 0; i < width; ++i) {
-			for (size_t j = 0; j < height; ++j) {
-				// check if outside new boundaries (in unplayable area)
-				bool outside_new = (i < new_left_p || i >= width - new_right_p || j < new_bottom_p || j >= height - new_top_p);
-
-				// check if outside old boundaries (in old unplayable area)
-				bool outside_old = (i < old_left_p || i >= width - old_right_p || j < old_bottom_p || j >= height - old_top_p);
-
-				// update the pathing map
-				if (outside_new) {
-					pathing_map.pathing_cells_static[j * width + i] = edge_pathing;
-				} else if (outside_old) {
-					pathing_map.pathing_cells_static[j * width + i] = terrain.get_terrain_pathing(i, j);
-				}
-			}
-		}
-
-		pathing_map.upload_static_pathing();
-	}
+	);
 };
 
 #include "map.moc"
