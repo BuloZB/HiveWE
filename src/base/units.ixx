@@ -6,6 +6,7 @@ module;
 export module Units;
 
 import std;
+import GLThreadPool;
 import Utilities;
 import SkinnedMesh;
 import SkeletalModelInstance;
@@ -97,6 +98,7 @@ export struct Unit {
 
 export class Units {
 	std::unordered_map<std::string, std::shared_ptr<SkinnedMesh>> id_to_mesh;
+	std::mutex mesh_mutex;
 
 	static constexpr int write_version = 8;
 	static constexpr int write_subversion = 11;
@@ -303,21 +305,31 @@ export class Units {
 	}
 
 	void create() {
+		// Load units multithreaded
+		std::vector<std::future<void>> futures;
+		futures.reserve(units.size() + items.size());
+
 		for (auto& i : units) {
-			// ToDo handle starting location
 			if (i.id == "sloc") {
 				continue;
 			}
 
-			i.mesh = get_mesh(i.id);
-			i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
-			i.update();
+			futures.push_back(gl_thread_pool.submit([&] {
+				i.mesh = get_mesh(i.id);
+				i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
+				i.update();
+			}));
+		}
+		for (auto& i : items) {
+			futures.push_back(gl_thread_pool.submit([&] {
+				i.mesh = get_mesh(i.id);
+				i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
+				i.update();
+			}));
 		}
 
-		for (auto& i : items) {
-			i.mesh = get_mesh(i.id);
-			i.skeleton = SkeletalModelInstance(i.mesh->mdx, get_required_animation_names(i.id));
-			i.update();
+		for (auto& f : futures) {
+			f.get();
 		}
 	}
 
@@ -414,8 +426,11 @@ export class Units {
 	}
 
 	std::shared_ptr<SkinnedMesh> get_mesh(const std::string& id) {
-		if (const auto found = id_to_mesh.find(id); found != id_to_mesh.end()) {
-			return found->second;
+		{
+			std::lock_guard lock(mesh_mutex);
+			if (const auto found = id_to_mesh.find(id); found != id_to_mesh.end()) {
+				return found->second;
+			}
 		}
 
 		fs::path mesh_path = units_slk.data<std::string_view>("file", id);
@@ -429,13 +444,18 @@ export class Units {
 		// Mesh doesn't exist at all
 		if (!hierarchy.file_exists(mesh_path)) {
 			std::println("Missing model file for {} With file path: {}", id, mesh_path.string());
-			id_to_mesh.emplace(id, resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt));
-			return id_to_mesh[id];
+			auto mesh = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
+			std::lock_guard lock(mesh_mutex);
+			id_to_mesh.emplace(id, mesh);
+			return mesh;
 		}
 
-		id_to_mesh.emplace(id, resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt));
-
-		return id_to_mesh[id];
+		auto mesh = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+		{
+			std::lock_guard lock(mesh_mutex);
+			id_to_mesh.emplace(id, mesh);
+		}
+		return mesh;
 	}
 
 	static std::vector<std::string> get_required_animation_names(const std::string& id) {

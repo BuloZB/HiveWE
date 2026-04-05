@@ -93,6 +93,7 @@ export class Map: public QObject {
 	RenderManager render_manager;
 
 	void load(const fs::path& path) {
+		Timer full_timer;
 		Timer timer;
 
 		hierarchy.map_directory = path;
@@ -328,9 +329,11 @@ export class Map: public QObject {
 		gameplay_constants.load();
 
 		info.load();
+		profile_reset();
 		terrain.load(physics);
 
 		std::println("Terrain loading: {:>5}ms", timer.elapsed_ms());
+		profile_print();
 		timer.reset();
 
 		// Pathing Map
@@ -360,10 +363,13 @@ export class Map: public QObject {
 			load_modification_file("war3mapSkin.w3b", destructibles_slk, destructibles_meta_slk, false);
 		}
 
+		profile_reset();
 		doodads.load(terrain, info);
 		doodads.create(terrain, pathing_map);
+		glFinish(); // Ensure all GL work submitted on worker contexts is visible to the main context
 
 		std::println("Doodad loading:\t {:>5}ms", timer.elapsed_ms());
+		profile_print();
 		timer.reset();
 
 		if (hierarchy.map_file_exists("war3map.w3u")) {
@@ -383,12 +389,15 @@ export class Map: public QObject {
 		}
 
 		// Units/Items
+		profile_reset();
 		if (hierarchy.map_file_exists("war3mapUnits.doo")) {
 			units.load(terrain, info);
 			units.create();
+			glFinish(); // Ensure all GL work submitted on worker contexts is visible to the main context
 		}
 
 		std::println("Unit loading:\t {:>5}ms", timer.elapsed_ms());
+		profile_print();
 		timer.reset();
 
 		// Abilities
@@ -445,6 +454,9 @@ export class Map: public QObject {
 
 		std::println("Shadows loading: {:>5}ms", timer.elapsed_ms());
 		timer.reset();
+
+		std::println("Full loading: {:>5}ms", full_timer.elapsed_ms());
+
 
 		// Center camera
 		camera.position = glm::vec3(terrain.width / 2, terrain.height / 2, 0);
