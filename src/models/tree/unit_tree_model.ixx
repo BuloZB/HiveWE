@@ -45,7 +45,12 @@ export class UnitTreeModel : public BaseTreeModel {
 			subIndex = 2;
 		}
 
-		return categories.at(race).item->children[subIndex];
+		if (const auto found = categories.find(race); found != categories.end()) {
+			return found->second.item->children[subIndex];
+		} else {
+			std::println("Unit with id: {} has no race set. Set a race!", id);
+			return categories.begin()->second.item->children[subIndex];
+		}
 	}
 
   public:
@@ -103,7 +108,7 @@ export class UnitTreeModel : public BaseTreeModel {
 
 		for (size_t i = 0; i < units_slk.rows(); i++) {
 			const std::string id = units_slk.index_to_row.at(i);
-			BaseTreeItem* item = new BaseTreeItem(getFolderParent(id));
+			BaseTreeItem* item = new BaseTreeItem(UnitTreeModel::getFolderParent(id));
 			item->id = id;
 			items.emplace(id, item);
 		}

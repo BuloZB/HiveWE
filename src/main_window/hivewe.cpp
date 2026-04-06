@@ -30,6 +30,7 @@ import "trigger_editor.h";
 #include "QMessageBox"
 #include "QProcess"
 import "menus/gameplay_constants_editor.h";
+import "asset_manager/asset_manager.h";
 
 namespace fs = std::filesystem;
 
@@ -221,6 +222,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui.ribbon->gameplay_constants, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		window_handler.create_or_raise<GameplayConstantsEditor>(nullptr, created);
+	});
+
+	connect(ui.ribbon->asset_manager, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<AssetManager>(nullptr, created);
 	});
 
 	minimap->setParent(ui.widget);

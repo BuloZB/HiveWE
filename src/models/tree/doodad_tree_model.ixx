@@ -12,6 +12,7 @@ import BaseTreeModel;
 import QIconResource;
 import SLK;
 import Globals;
+import ResourceManager;
 
 export class DoodadTreeModel : public BaseTreeModel {
 	struct Category {
@@ -26,7 +27,16 @@ export class DoodadTreeModel : public BaseTreeModel {
 	BaseTreeItem* getFolderParent(const std::string& id) const override {
 		const std::string_view category = doodads_slk.data<std::string_view>("category", id);
 
-		return categories.at(category.front()).item;
+		if (category.empty()) {
+			std::println("Doodad with id: {} has no category set. Set a category!", id);
+			return categories.begin()->second.item;
+		}
+
+		if (const auto found = categories.find(category.front()); found != categories.end()) {
+			return found->second.item;
+		}
+
+		return categories.begin()->second.item;
 	}
 
   public:

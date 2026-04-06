@@ -53,7 +53,11 @@ export void to_lowercase(std::string& string) {
 }
 
 export void normalize_path_to_backslash(std::string& path) {
-	std::transform(path.begin(), path.end(), path.begin(), [](unsigned char c) { return c == '/' ? '\\' : c; });
+	std::transform(path.begin(), path.end(), path.begin(), [](const unsigned char c) { return c == '/' ? '\\' : c; });
+}
+
+export void normalize_path_to_forward_slash(std::string& path) {
+	std::transform(path.begin(), path.end(), path.begin(), [](const unsigned char c) { return c == '\\' ? '/' : c; });
 }
 
 // trim from start (in place)

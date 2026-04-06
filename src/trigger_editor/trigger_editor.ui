@@ -41,7 +41,7 @@
   <action name="actionGenerateScript">
    <property name="icon">
     <iconset>
-     <normaloff>Data/Icons/Ribbon/triggereditor32x32.png</normaloff>Data/Icons/Ribbon/triggereditor32x32.png</iconset>
+     <normaloff>Data/Icons/Ribbon/triggereditor.png</normaloff>Data/Icons/Ribbon/triggereditor.png</iconset>
    </property>
    <property name="text">
     <string>GenerateScript</string>

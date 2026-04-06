@@ -44,6 +44,7 @@ public:
 	QRibbonButton* trigger_editor = new QRibbonButton;
 	QRibbonButton* object_editor = new QRibbonButton;
 	QRibbonButton* model_editor = new QRibbonButton;
+	QRibbonButton* asset_manager = new QRibbonButton;
 
 	QRibbonButton* terrain_palette = new QRibbonButton;
 	QRibbonButton* doodad_palette = new QRibbonButton;
