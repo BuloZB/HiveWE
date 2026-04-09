@@ -19,7 +19,7 @@ export class ResourceManager {
 		std::unique_lock lock(mutex);
 
 		if (const auto it = resources.find(key); it != resources.end()) {
-			auto fut = it->second;
+			const auto fut = it->second;
 			lock.unlock();
 			return std::dynamic_pointer_cast<T>(fut.get());
 		}
