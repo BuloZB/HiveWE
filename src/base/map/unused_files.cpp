@@ -15,12 +15,12 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	// Then load each of them and save the resources references by them
 	// Deal with game overrides somehow
 
-	auto total_start = std::chrono::steady_clock::now();
+	const auto total_start = std::chrono::steady_clock::now();
 	auto start = std::chrono::steady_clock::now();
 
 	hive::unordered_map<std::string, std::unordered_set<std::string>> resources;
 
-	auto normalize_path = [&](const std::string& path) {
+	const auto normalize_path = [&](const std::string& path) {
 		auto path_copy = path;
 		if (path_copy.ends_with(".mdl")) {
 			path_copy = path.substr(0, path.size() - 4) + ".mdx";
@@ -29,7 +29,7 @@ std::vector<FileUsage> Map::get_file_usage() const {
 		return path_copy;
 	};
 
-	auto find_references = [&](const slk::SLK& slk, const std::vector<std::string>& keys) {
+	const auto find_references = [&](const slk::SLK& slk, const std::vector<std::string>& keys) {
 		for (const auto& [id, values] : slk.shadow_data) {
 			for (const auto& key : keys) {
 				if (auto found = values.find(key); found != values.end()) {
@@ -113,7 +113,7 @@ std::vector<FileUsage> Map::get_file_usage() const {
 
 	for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
 		if (i.is_regular_file()) {
-			auto new_path = i.path();
+			const auto new_path = i.path();
 			std::string path = new_path.lexically_relative(filesystem_path).string();
 			std::string file_name = i.path().filename().string();
 			if (imports.blacklist.contains(file_name)) {
@@ -130,12 +130,12 @@ std::vector<FileUsage> Map::get_file_usage() const {
 		script_file_name = "war3map.j";
 	}
 
-	auto binary = read_file(filesystem_path / script_file_name);
+	const auto binary = read_file(filesystem_path / script_file_name);
 	std::string map_script;
 	if (!binary) {
 		std::println("Error reading map script. Save your map first.");
 	} else {
-		auto a = binary.value();
+		const auto a = binary.value();
 		map_script = std::string(a.buffer.begin(), a.buffer.end());
 	}
 

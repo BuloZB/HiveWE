@@ -38,7 +38,7 @@ TileSetter::TileSetter(QWidget *parent) : QDialog(parent) {
 	ui.flowlayout_placeholder_2->addLayout(available_layout);
 
 	slk::SLK& slk = map->terrain.terrain_slk;
-	for (auto&& i : map->terrain.tileset_ids) {
+	for (const auto&i : map->terrain.tileset_ids) {
 		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i));
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
@@ -60,7 +60,7 @@ TileSetter::TileSetter(QWidget *parent) : QDialog(parent) {
 		selected_group->addButton(button);
 	}
 
-	for (auto&& [key, value] : world_edit_data.section("TileSets")) {
+	for (const auto&[key, value] : world_edit_data.section("TileSets")) {
 //		const std::string tileset_key = split(value, ',').front();
 		ui.tileset->addItem(QString::fromStdString(value[0]), QString::fromStdString(key));
 	}
@@ -161,7 +161,7 @@ void TileSetter::available_tile_clicked(const QAbstractButton* button) const {
 
 	// Check if tile was already in existing/modified tileset
 	bool tile_already_added = false;
-	for (auto&& i : selected_group->buttons()) {
+	for (const auto&i : selected_group->buttons()) {
 		if (i->property("tileID") == button->property("tileID")) {
 			tile_already_added = true;
 		}
@@ -204,7 +204,7 @@ void TileSetter::shift_right() const {
 
 void TileSetter::save_tiles() {
 	std::vector<std::string> to_ids;
-	for (auto&& j : selected_layout->items()) {
+	for (const auto&j : selected_layout->items()) {
 		to_ids.push_back(j->widget()->property("tileID").toString().toStdString());
 	}
 

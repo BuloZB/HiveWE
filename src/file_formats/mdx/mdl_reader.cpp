@@ -34,7 +34,7 @@ namespace mdx {
 			if (position >= tokens.size()) [[unlikely]] {
 				return failure("Expected a token but reached the end of the file");
 			}
-			auto token = tokens[position];
+			const auto token = tokens[position];
 			position += 1;
 			return outcome::success(token);
 		}

@@ -25,7 +25,7 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 	ui.editorVersion->setText(QString::number(map->info.editor_version));
 
 	// Loading Screen Tab
-	for (auto&& [key, value] : world_edit_data.section("LoadingScreens")) {
+	for (const auto& [key, value] : world_edit_data.section("LoadingScreens")) {
 		if (key == "NumScreens") {
 			continue;
 		}
@@ -41,7 +41,7 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 		}
 	}
 
-	for (auto&& [key, value] : world_edit_data.section("LoadingScreens")) {
+	for (const auto& [key, value] : world_edit_data.section("LoadingScreens")) {
 		if (key == "NumScreens") {
 			continue;
 		}
@@ -111,7 +111,7 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 	);
 
 	// Custom Lighting
-	for (auto&& [key, value] : world_edit_data.section("TileSets")) {
+	for (const auto& [key, value] : world_edit_data.section("TileSets")) {
 		ui.customLightingCombo->addItem(QString::fromStdString(value[0]), key.front());
 
 		if (key == std::string(&map->info.custom_light_tileset, 1)) {

@@ -56,15 +56,15 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	map->brush = &brush;
 
 	ui.tileset->addItem("All Tilesets", '*');
-	for (auto&& [key, value] : world_edit_data.section("TileSets")) {
+	for (const auto& [key, value] : world_edit_data.section("TileSets")) {
 		ui.tileset->addItem(QString::fromStdString(value.front()), key.front());
 	}
 
-	for (auto&& [key, value] : world_edit_data.section("DoodadCategories")) {
+	for (const auto& [key, value] : world_edit_data.section("DoodadCategories")) {
 		ui.type->addItem(QString::fromStdString(value.front()), QString::fromStdString(key));
 	}
 
-	for (auto&& [key, value] : world_edit_data.section("DestructibleCategories")) {
+	for (const auto& [key, value] : world_edit_data.section("DestructibleCategories")) {
 		ui.type->addItem(QString::fromStdString(value.front()), QString::fromStdString(key));
 	}
 
@@ -393,7 +393,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 
 	connect(edit_in_oe, &QSmallRibbonButton::clicked, [&]() {
 		bool created;
-		auto editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+		const auto editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
 		const Doodad* doodad = *brush.selections.begin();
 		if (destructibles_slk.row_headers.contains(doodad->id)) {
 			editor->select_id(ObjectEditor::Category::destructible, doodad->id);

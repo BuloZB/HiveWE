@@ -84,11 +84,11 @@ ObjectInfo resolve_used_by_id(const std::string& id) {
 	if (id.contains('/')) {
 		return {QString::fromStdString(id), QFileIconProvider().icon(QFileIconProvider::File), -1};
 	}
-	auto display = [&](const QString& name) {
+	const auto display = [&](const QString& name) {
 		return name + " (" + QString::fromStdString(id) + ")";
 	};
 	// Load the category icon used by DoodadTreeModel / DestructibleTreeModel
-	auto category_icon = [](const std::string& section, char cat) -> QIcon {
+	const auto category_icon = [](const std::string& section, char cat) -> QIcon {
 		for (const auto& [key, value] : world_edit_data.section(section)) {
 			if (!key.empty() && key.front() == cat) {
 				return resource_manager.load<QIconResource>(value[1])->icon;
@@ -216,7 +216,7 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 
 	// When objects are deleted in the Object Editor, remove their references from the tree.
 	// We use rowsAboutToBeRemoved so the SLK index_to_row mapping is still intact.
-	auto make_removal_handler = [this](const slk::SLK& slk) {
+	const auto make_removal_handler = [this](const slk::SLK& slk) {
 		return [this, &slk](const QModelIndex&, const int first, const int last) {
 			for (int i = first; i <= last; i++) {
 				remove_object_references(slk.index_to_row.at(i));
@@ -273,7 +273,7 @@ void AssetManager::refresh() const {
 		}
 
 		for (const auto& id : used_by) {
-			const auto info = resolve_used_by_id(id);
+			const auto& info = resolve_used_by_id(id);
 
 			auto* child_item = new QStandardItem(info.display_name);
 			child_item->setEditable(false);
@@ -308,14 +308,14 @@ void AssetManager::remove_object_references(const std::string& id) {
 	constexpr QColor orange(200, 120, 0);
 
 	for (int row = 0; row < model->rowCount(); row++) {
-		QStandardItem* file_item = model->item(row, 0);
+		QStandardItem* const file_item = model->item(row, 0);
 		if (!file_item) {
 			continue;
 		}
 
 		bool changed = false;
 		for (int child_row = file_item->rowCount() - 1; child_row >= 0; child_row--) {
-			QStandardItem* child = file_item->child(child_row);
+			const QStandardItem* const child = file_item->child(child_row);
 			if (child && child->data(ObjectIdRole).toString() == qid) {
 				file_item->removeRow(child_row);
 				changed = true;

@@ -206,7 +206,7 @@ HiveWE::HiveWE(QWidget* parent)
 
 	connect(ui.ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
-		auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
+		const auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
 		connect(this, &HiveWE::saving_initiated, editor, &TriggerEditor::save_changes, Qt::UniqueConnection);
 	});
 

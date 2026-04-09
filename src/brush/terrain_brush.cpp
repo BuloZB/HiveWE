@@ -85,7 +85,7 @@ void TerrainBrush::mouse_release_event(QMouseEvent* event) {
 
 // Make this an iterative function instead to avoid stack overflows
 void TerrainBrush::check_nearby(const int begx, const int begy, const int i, const int j, QRect& area) const {
-	QRect bounds = QRect(i - 1, j - 1, 3, 3).intersected({0, 0, map->terrain.width, map->terrain.height});
+	const QRect bounds = QRect(i - 1, j - 1, 3, 3).intersected({0, 0, map->terrain.width, map->terrain.height});
 
 	for (int k = bounds.x(); k <= bounds.right(); k++) {
 		for (int l = bounds.y(); l <= bounds.bottom(); l++) {
@@ -93,7 +93,7 @@ void TerrainBrush::check_nearby(const int begx, const int begy, const int i, con
 				continue;
 			}
 
-			int difference = map->terrain.corner_layer_height[map->terrain.ci(i, j)] - map->terrain.corner_layer_height[map->terrain.ci(k, l)];
+			const int difference = map->terrain.corner_layer_height[map->terrain.ci(i, j)] - map->terrain.corner_layer_height[map->terrain.ci(k, l)];
 			if (std::abs(difference) > 2 && !contains(glm::ivec2(begx + (k - i), begy + (l - k)))) {
 				map->terrain.corner_layer_height[map->terrain.ci(k, l)] = map->terrain.corner_layer_height[map->terrain.ci(i, j)] - std::clamp(difference, -2, 2);
 				map->terrain.corner_ramp[map->terrain.ci(k, l)] = false;
@@ -110,8 +110,8 @@ void TerrainBrush::check_nearby(const int begx, const int begy, const int i, con
 }
 
 void TerrainBrush::apply_begin() {
-	int width = map->terrain.width;
-	int height = map->terrain.height;
+	const int width = map->terrain.width;
+	const int height = map->terrain.height;
 	const auto& terrain = map->terrain;
 
 	const glm::vec2 position = get_position();
@@ -251,12 +251,12 @@ void TerrainBrush::apply(double frame_delta) {
 
 				switch (deformation_type) {
 					case deformation::raise: {
-						auto distance = std::sqrt(std::pow(center_x - i, 2) + std::pow(center_y - j, 2));
+						const auto distance = std::sqrt(std::pow(center_x - i, 2) + std::pow(center_y - j, 2));
 						new_height += std::max(0.0, 1 - distance / size.x * std::sqrt(2)) * frame_delta;
 						break;
 					}
 					case deformation::lower: {
-						auto distance = std::sqrt(std::pow(center_x - i, 2) + std::pow(center_y - j, 2));
+						const auto distance = std::sqrt(std::pow(center_x - i, 2) + std::pow(center_y - j, 2));
 						new_height -= std::max(0.0, 1 - distance / size.x * std::sqrt(2)) * frame_delta;
 						break;
 					}

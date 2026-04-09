@@ -16,14 +16,14 @@ TilePather::TilePather(QWidget *parent) : QDialog(parent) {
 
 	ui.flowlayout_placeholder->addLayout(selected_layout);
 
-	for (auto&&[tile_id, options] : map->terrain.pathing_options) {
+	for (const auto& [tile_id, options] :map->terrain.pathing_options) {
 		pathing_options[tile_id].unwalkable = options.unwalkable;
 		pathing_options[tile_id].unflyable = options.unflyable;
 		pathing_options[tile_id].unbuildable = options.unbuildable;
 	}
 
 	const slk::SLK& slk = map->terrain.terrain_slk;
-	for (auto&& i : map->terrain.tileset_ids) {
+	for (const auto& i : map->terrain.tileset_ids) {
 		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i));
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
@@ -83,7 +83,7 @@ void TilePather::changed_tile(QAbstractButton* button) {
 }
 
 void TilePather::save_tiles() {
-	for (auto&&[tile_id, options] : pathing_options) {
+	for (const auto& [tile_id, options] :pathing_options) {
 		// Save state
 		map->terrain.pathing_options[tile_id].unwalkable = options.unwalkable;
 		map->terrain.pathing_options[tile_id].unflyable = options.unflyable;

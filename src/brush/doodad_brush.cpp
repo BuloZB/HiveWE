@@ -230,7 +230,7 @@ void DoodadBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	if (event->button() == Qt::LeftButton && input_handler.mouse.y > 0.f) {
 		if (mode == Mode::selection) {
 			if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
-				auto id = map->render_manager.pick_doodad_id_under_mouse(map->doodads, input_handler.mouse);
+				const auto id = map->render_manager.pick_doodad_id_under_mouse(map->doodads, input_handler.mouse);
 				if (id) {
 					if (selections.contains(&map->doodads.doodads[id.value()])) {
 						selections.erase(&map->doodads.doodads[id.value()]);
@@ -242,7 +242,7 @@ void DoodadBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 			}
 
 			if (!event->modifiers()) {
-				auto id = map->render_manager.pick_doodad_id_under_mouse(map->doodads, input_handler.mouse);
+				const auto id = map->render_manager.pick_doodad_id_under_mouse(map->doodads, input_handler.mouse);
 				if (id) {
 					Doodad& doodad = map->doodads.doodads[id.value()];
 
@@ -337,7 +337,7 @@ void DoodadBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 			} else if (mode == Mode::selection && selection_started) {
 				const glm::vec3 size = input_handler.mouse_world - selection_start;
 
-				auto query = map->doodads.query_area({selection_start.x, selection_start.y, size.x, size.y});
+				const auto query = map->doodads.query_area({selection_start.x, selection_start.y, size.x, size.y});
 				if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
 					selections.insert(query.begin(), query.end());
 				} else if (event->modifiers() & Qt::KeyboardModifier::AltModifier) {
