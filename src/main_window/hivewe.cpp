@@ -494,7 +494,7 @@ void HiveWE::import_heightmap() {
 
 	for (int j = 0; j < height; j++) {
 		for (int i = 0; i < width; i++) {
-			map->terrain.corners[i][j].height = (image_data[((height - 1 - j) * width + i) * channels] - 128.f) / 8.f;
+			map->terrain.corner_height[map->terrain.ci(i, j)] = (image_data[((height - 1 - j) * width + i) * channels] - 128.f) / 8.f;
 		}
 	}
 

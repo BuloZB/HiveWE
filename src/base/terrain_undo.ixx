@@ -26,7 +26,7 @@ public:
 	void undo(WorldEditContext& ctx) override {
 		for (int j = area.top(); j <= area.bottom(); j++) {
 			for (int i = area.left(); i <= area.right(); i++) {
-				ctx.terrain.corners[i][j] = old_corners[(j - area.top()) * area.width() + i - area.left()];
+				ctx.terrain.set_corner(i, j, old_corners[(j - area.top()) * area.width() + i - area.left()]);
 			}
 		}
 
@@ -52,7 +52,7 @@ public:
 	void redo(WorldEditContext& ctx) override {
 		for (int j = area.top(); j <= area.bottom(); j++) {
 			for (int i = area.left(); i <= area.right(); i++) {
-				ctx.terrain.corners[i][j] = new_corners[(j - area.top()) * area.width() + i - area.left()];
+				ctx.terrain.set_corner(i, j, new_corners[(j - area.top()) * area.width() + i - area.left()]);
 			}
 		}
 

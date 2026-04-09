@@ -305,7 +305,7 @@ export class Doodads {
 
 		for (int i = new_area.left(); i < new_area.right(); i++) {
 			for (int j = new_area.top(); j < new_area.bottom(); j++) {
-				terrain.corners[i][j].special_doodad = false;
+				terrain.corner_special_doodad[terrain.ci(i, j)] = 0;
 			}
 		}
 
@@ -329,7 +329,7 @@ export class Doodads {
 						continue;
 					}
 
-					terrain.corners[x][y].special_doodad = true;
+					terrain.corner_special_doodad[terrain.ci(x, y)] = 1;
 				}
 			}
 		}

@@ -33,9 +33,7 @@ using namespace std::literals::string_literals;
 
 export struct Corner {
 	bool map_edge = false;
-
 	int ground_texture = 0;
-
 	float height = 0.f;
 	float water_height = 0.f;
 	bool ramp = false;
@@ -45,61 +43,46 @@ export struct Corner {
 	bool cliff = false;
 	bool romp = false;
 	bool special_doodad = false;
-
 	int ground_variation = 0;
 	int cliff_variation = 0;
-
 	int cliff_texture = 15;
 	int layer_height = 2;
-
-	// total sum 570
-	static constexpr std::tuple<int, int> variation_chances[18] = {
-		{0, 85},
-		{16, 85},
-		{0, 85},
-		{1, 10},
-		{2, 4},
-		{3, 1},
-		{4, 85},
-		{5, 10},
-		{6, 4},
-		{7, 1},
-		{8, 85},
-		{9, 10},
-		{10, 4},
-		{11, 1},
-		{12, 85},
-		{13, 10},
-		{14, 4},
-		{15, 1}
-	};
-
-	float final_ground_height() const {
-		return height + layer_height - 2.0;
-	}
-
-	float final_water_height(const float water_offset) const {
-		return water_height + water_offset;
-	}
-
-	void set_random_variation() {
-		std::random_device rd;
-		std::mt19937 e2(rd());
-		std::uniform_int_distribution<> dist(0, 570);
-
-		int nr = dist(e2) - 1;
-
-		for (auto&& [variation, chance] : variation_chances) {
-			if (nr < chance) {
-				ground_variation = variation;
-				return;
-			}
-			nr -= chance;
-		}
-		assert("Didn't hit the list of tile variations");
-		ground_variation = 0;
-	}
 };
+
+// total sum 570
+constexpr std::tuple<int, int> variation_chances[18] = {
+	{0, 85},
+	{16, 85},
+	{0, 85},
+	{1, 10},
+	{2, 4},
+	{3, 1},
+	{4, 85},
+	{5, 10},
+	{6, 4},
+	{7, 1},
+	{8, 85},
+	{9, 10},
+	{10, 4},
+	{11, 1},
+	{12, 85},
+	{13, 10},
+	{14, 4},
+	{15, 1}
+};
+
+export int random_ground_variation() {
+	thread_local std::mt19937 rng(std::random_device {}());
+	std::uniform_int_distribution<> dist(0, 570);
+	int nr = dist(rng) - 1;
+	for (auto&& [variation, chance] : variation_chances) {
+		if (nr < chance) {
+			return variation;
+		}
+		nr -= chance;
+	}
+	return 0;
+}
 
 export struct TilePathingg {
 	bool unwalkable = false;
@@ -120,33 +103,20 @@ export class Terrain: public QObject {
 
 	static constexpr int write_version = 12;
 
-	// Sequential versions for GPU uploading
-	std::vector<float> ground_heights;
-	std::vector<float> final_ground_heights;
-	std::vector<glm::uvec4> ground_texture_list;
-	std::vector<GLuint64> ground_texture_handles;
-	std::vector<std::uint32_t> ground_exists_data;
-
-	std::vector<float> water_heights;
-	std::vector<uint32_t> water_exists_data;
+	// Derived GPU arrays
+	std::vector<float> gpu_final_ground_heights;
+	std::vector<glm::uvec4> gpu_ground_texture_list;
+	std::vector<GLuint64> gpu_ground_texture_handles;
+	/// One per tile, not per corner. So (width - 1) * (height - 1)
+	std::vector<std::uint32_t> gpu_ground_exists_data;
+	std::vector<uint32_t> gpu_water_exists_data;
 
 	btHeightfieldTerrainShape* collision_shape;
 	btRigidBody* collision_body;
 
-  public:
-	char tileset;
-	std::vector<std::string> tileset_ids;
-	std::vector<std::string> cliffset_ids;
-
-	int width;
-	int height;
-	glm::vec2 offset;
-
 	// Ground
 	std::shared_ptr<Shader> ground_shader;
-	hive::unordered_map<std::string, int> ground_texture_to_id;
 	std::vector<std::shared_ptr<GroundTexture>> ground_textures;
-	hive::unordered_map<std::string, TilePathingg> pathing_options;
 
 	// GPU buffers
 	GLuint ground_height_buffer;
@@ -157,9 +127,108 @@ export class Terrain: public QObject {
 	GLuint ground_exists_buffer;
 	GLuint water_exists_buffer;
 
-	std::vector<std::vector<Corner>> corners;
-	// For undo/redo operations
-	std::vector<std::vector<Corner>> old_corners;
+  public:
+	char tileset;
+	std::vector<std::string> tileset_ids;
+	std::vector<std::string> cliffset_ids;
+
+	/// In corners, not tiles
+	int width;
+	/// In corners, not tiles
+	int height;
+	/// In Warcraft units (*128)
+	glm::vec2 offset;
+
+	hive::unordered_map<std::string, int> ground_texture_to_id;
+	hive::unordered_map<std::string, TilePathingg> pathing_options;
+
+	// SoA corner data — indexed as ci(x, y) = y * width + x
+	std::vector<float> corner_height;
+	std::vector<float> corner_water_height;
+	std::vector<int> corner_ground_texture;
+	std::vector<int> corner_ground_variation;
+	std::vector<int> corner_cliff_variation;
+	std::vector<int> corner_cliff_texture;
+	std::vector<int> corner_layer_height;
+	std::vector<uint8_t> corner_map_edge;
+	std::vector<uint8_t> corner_ramp;
+	std::vector<uint8_t> corner_blight;
+	std::vector<uint8_t> corner_water;
+	std::vector<uint8_t> corner_boundary;
+	std::vector<uint8_t> corner_cliff;
+	std::vector<uint8_t> corner_romp;
+	std::vector<uint8_t> corner_special_doodad;
+
+	int ci(const int x, const int y) const {
+		return y * width + x;
+	}
+
+	float corner_final_ground_height(int x, int y) const {
+		const int idx = ci(x, y);
+		return corner_height[idx] + corner_layer_height[idx] - 2.0f;
+	}
+
+	float corner_final_water_height(int x, int y) const {
+		return corner_water_height[ci(x, y)] + water_offset;
+	}
+
+	Corner get_corner(int x, int y) const {
+		const int idx = ci(x, y);
+		Corner c;
+		c.height = corner_height[idx];
+		c.water_height = corner_water_height[idx];
+		c.ground_texture = corner_ground_texture[idx];
+		c.ground_variation = corner_ground_variation[idx];
+		c.cliff_variation = corner_cliff_variation[idx];
+		c.cliff_texture = corner_cliff_texture[idx];
+		c.layer_height = corner_layer_height[idx];
+		c.map_edge = corner_map_edge[idx];
+		c.ramp = corner_ramp[idx];
+		c.blight = corner_blight[idx];
+		c.water = corner_water[idx];
+		c.boundary = corner_boundary[idx];
+		c.cliff = corner_cliff[idx];
+		c.romp = corner_romp[idx];
+		c.special_doodad = corner_special_doodad[idx];
+		return c;
+	}
+
+	void set_corner(int x, int y, const Corner& c) {
+		const int idx = ci(x, y);
+		corner_height[idx] = c.height;
+		corner_water_height[idx] = c.water_height;
+		corner_ground_texture[idx] = c.ground_texture;
+		corner_ground_variation[idx] = c.ground_variation;
+		corner_cliff_variation[idx] = c.cliff_variation;
+		corner_cliff_texture[idx] = c.cliff_texture;
+		corner_layer_height[idx] = c.layer_height;
+		corner_map_edge[idx] = c.map_edge;
+		corner_ramp[idx] = c.ramp;
+		corner_blight[idx] = c.blight;
+		corner_water[idx] = c.water;
+		corner_boundary[idx] = c.boundary;
+		corner_cliff[idx] = c.cliff;
+		corner_romp[idx] = c.romp;
+		corner_special_doodad[idx] = c.special_doodad;
+	}
+
+	void resize_corner_arrays(int total) {
+		corner_height.assign(total, 0.f);
+		corner_water_height.assign(total, 0.f);
+		corner_ground_texture.assign(total, 0);
+		corner_ground_variation.assign(total, 0);
+		corner_cliff_variation.assign(total, 0);
+		corner_cliff_texture.assign(total, 15);
+		corner_layer_height.assign(total, 2);
+		corner_map_edge.assign(total, 0);
+		corner_ramp.assign(total, 0);
+		corner_blight.assign(total, 0);
+		corner_water.assign(total, 0);
+		corner_boundary.assign(total, 0);
+		corner_cliff.assign(total, 0);
+		corner_romp.assign(total, 0);
+		corner_special_doodad.assign(total, 0);
+	}
 
 	int variation_size = 64;
 	int blight_texture;
@@ -200,7 +269,7 @@ export class Terrain: public QObject {
 	float current_texture = 1.f;
 	GLuint water_texture_array;
 
-	~Terrain() {
+	~Terrain() override {
 		glDeleteTextures(1, &cliff_texture_array);
 		glDeleteTextures(1, &water_texture_array);
 
@@ -246,42 +315,42 @@ export class Terrain: public QObject {
 		offset = reader.read<glm::vec2>();
 
 		// Parse all tilepoints
-		corners.resize(width, std::vector<Corner>(height));
+		resize_corner_arrays(width * height);
 		for (int j = 0; j < height; j++) {
 			for (int i = 0; i < width; i++) {
-				Corner& corner = corners[i][j];
+				const int idx = ci(i, j);
 
-				corners[i][j].height = (reader.read<uint16_t>() - 8192.f) / 512.f;
+				corner_height[idx] = (reader.read<uint16_t>() - 8192.f) / 512.f;
 
 				const uint16_t water_and_edge = reader.read<uint16_t>();
-				corners[i][j].water_height = ((water_and_edge & 0x3FFF) - 8192.f) / 512.f;
-				corner.map_edge = water_and_edge & 0x4000;
+				corner_water_height[idx] = ((water_and_edge & 0x3FFF) - 8192.f) / 512.f;
+				corner_map_edge[idx] = (water_and_edge & 0x4000) != 0;
 
 				if (version >= 12) {
 					const uint16_t texture_and_flags = reader.read<uint16_t>();
-					corner.ground_texture = texture_and_flags & 0b00'0000'0011'1111;
+					corner_ground_texture[idx] = texture_and_flags & 0b00'0000'0011'1111;
 
-					corner.ramp = texture_and_flags & 0b00'0100'0000;
-					corner.blight = texture_and_flags & 0b00'1000'0000;
-					corner.water = texture_and_flags & 0b01'0000'0000;
-					corner.boundary = texture_and_flags & 0b10'0000'0000;
+					corner_ramp[idx] = (texture_and_flags & 0b00'0100'0000) != 0;
+					corner_blight[idx] = (texture_and_flags & 0b00'1000'0000) != 0;
+					corner_water[idx] = (texture_and_flags & 0b01'0000'0000) != 0;
+					corner_boundary[idx] = (texture_and_flags & 0b10'0000'0000) != 0;
 				} else {
 					const uint8_t texture_and_flags = reader.read<uint8_t>();
-					corner.ground_texture = texture_and_flags & 0b0000'1111;
+					corner_ground_texture[idx] = texture_and_flags & 0b0000'1111;
 
-					corner.ramp = texture_and_flags & 0b0001'0000;
-					corner.blight = texture_and_flags & 0b0010'0000;
-					corner.water = texture_and_flags & 0b0100'0000;
-					corner.boundary = texture_and_flags & 0b1000'0000;
+					corner_ramp[idx] = (texture_and_flags & 0b0001'0000) != 0;
+					corner_blight[idx] = (texture_and_flags & 0b0010'0000) != 0;
+					corner_water[idx] = (texture_and_flags & 0b0100'0000) != 0;
+					corner_boundary[idx] = (texture_and_flags & 0b1000'0000) != 0;
 				}
 
 				const uint8_t variation = reader.read<uint8_t>();
-				corner.ground_variation = variation & 0b0001'1111;
-				corner.cliff_variation = (variation & 0b1110'0000) >> 5;
+				corner_ground_variation[idx] = variation & 0b0001'1111;
+				corner_cliff_variation[idx] = (variation & 0b1110'0000) >> 5;
 
 				const uint8_t misc = reader.read<uint8_t>();
-				corner.cliff_texture = (misc & 0b1111'0000) >> 4;
-				corner.layer_height = misc & 0b0000'1111;
+				corner_cliff_texture[idx] = (misc & 0b1111'0000) >> 4;
+				corner_layer_height[idx] = misc & 0b0000'1111;
 			}
 		}
 
@@ -359,12 +428,12 @@ export class Terrain: public QObject {
 				resource_manager.load<GroundTexture>(terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id))
 			);
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
-			ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
+			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
 		blight_texture = static_cast<int>(ground_textures.size());
 		ground_texture_to_id.emplace("blight", blight_texture);
 		ground_textures.push_back(resource_manager.load<GroundTexture>(world_edit_data.data("TileSets", std::string(1, tileset), 1)));
-		ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
+		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		// Cliff Textures
 		for (const auto& cliff_id : cliffset_ids) {
@@ -382,8 +451,8 @@ export class Terrain: public QObject {
 		glCreateBuffers(1, &ground_texture_handle_buffer);
 		glNamedBufferStorage(
 			ground_texture_handle_buffer,
-			ground_texture_handles.size() * sizeof(GLuint64),
-			ground_texture_handles.data(),
+			gpu_ground_texture_handles.size() * sizeof(GLuint64),
+			gpu_ground_texture_handles.data(),
 			GL_DYNAMIC_STORAGE_BIT
 		);
 
@@ -478,32 +547,27 @@ export class Terrain: public QObject {
 		writer.write(height);
 		writer.write(offset);
 
-		for (int j = 0; j < height; j++) {
-			for (int i = 0; i < width; i++) {
-				const Corner& corner = corners[i][j];
+		for (size_t i = 0; i < corner_height.size(); i++) {
+			writer.write<uint16_t>(corner_height[i] * 512.f + 8192.f);
 
-				writer.write<uint16_t>(corner.height * 512.f + 8192.f);
+			uint16_t water_and_edge = corner_water_height[i] * 512.f + 8192.f;
+			water_and_edge += corner_map_edge[i] << 14;
+			writer.write(water_and_edge);
 
-				uint16_t water_and_edge = corner.water_height * 512.f + 8192.f;
-				water_and_edge += corner.map_edge << 14;
-				writer.write(water_and_edge);
+			uint16_t texture_and_flags = corner_ground_texture[i];
+			texture_and_flags |= corner_ramp[i] << 6;
+			texture_and_flags |= corner_blight[i] << 7;
+			texture_and_flags |= corner_water[i] << 8;
+			texture_and_flags |= corner_boundary[i] << 9;
+			writer.write(texture_and_flags);
 
-				uint16_t texture_and_flags = corner.ground_texture;
-				texture_and_flags |= corner.ramp << 6;
+			uint8_t variation = corner_ground_variation[i];
+			variation += corner_cliff_variation[i] << 5;
+			writer.write(variation);
 
-				texture_and_flags |= corner.blight << 7;
-				texture_and_flags |= corner.water << 8;
-				texture_and_flags |= corner.boundary << 9;
-				writer.write(texture_and_flags);
-
-				uint8_t variation = corner.ground_variation;
-				variation += corner.cliff_variation << 5;
-				writer.write(variation);
-
-				uint8_t misc = corner.cliff_texture << 4;
-				misc += corner.layer_height;
-				writer.write(misc);
-			}
+			uint8_t misc = corner_cliff_texture[i] << 4;
+			misc += corner_layer_height[i];
+			writer.write(misc);
 		}
 
 		hierarchy.map_file_write("war3map.w3e", writer.buffer);
@@ -547,19 +611,19 @@ export class Terrain: public QObject {
 
 		// Render cliffs
 		for (const auto& i : cliffs) {
-			const Corner& bottom_left = corners[i.x][i.y];
-			const Corner& bottom_right = corners[i.x + 1][i.y];
-			const Corner& top_left = corners[i.x][i.y + 1];
-			const Corner& top_right = corners[i.x + 1][i.y + 1];
+			const int bl = ci(i.x, i.y);
+			const int br = ci(i.x + 1, i.y);
+			const int tl = ci(i.x, i.y + 1);
+			const int tr = ci(i.x + 1, i.y + 1);
 
-			if (bottom_left.special_doodad) {
+			if (corner_special_doodad[bl]) {
 				continue;
 			}
 
 			const float min =
-				std::min({bottom_left.layer_height, bottom_right.layer_height, top_left.layer_height, top_right.layer_height});
+				std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
 
-			cliff_meshes[i.z]->render_queue({i.x, i.y, min - 2, bottom_left.cliff_texture});
+			cliff_meshes[i.z]->render_queue({i.x, i.y, min - 2, corner_cliff_texture[bl]});
 		}
 
 		cliff_shader->use();
@@ -623,35 +687,33 @@ export class Terrain: public QObject {
 		new_to_old.push_back(new_tileset_ids.size());
 
 		// Map old ids to the new ids
-		for (auto& i : corners) {
-			for (auto& j : i) {
-				j.ground_texture = new_to_old[j.ground_texture];
-			}
+		for (auto& ground_texture : corner_ground_texture) {
+			ground_texture = new_to_old[ground_texture];
 		}
 
 		// Reload tile textures
 		ground_textures.clear(); // ToDo Clear them after loading new ones?
 		ground_texture_to_id.clear();
-		ground_texture_handles.clear();
+		gpu_ground_texture_handles.clear();
 
 		for (const auto& tile_id : tileset_ids) {
 			ground_textures.push_back(resource_manager.load<GroundTexture>(
 				terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
 			));
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
-			ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
+			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
 		blight_texture = static_cast<int>(ground_textures.size());
 		ground_texture_to_id.emplace("blight", blight_texture);
 		ground_textures.push_back(resource_manager.load<GroundTexture>(
 			world_edit_data.data("TileSets", std::string(1, tileset), 1) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
 		));
-		ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
+		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		glNamedBufferStorage(
 			ground_texture_handle_buffer,
-			ground_texture_handles.size() * sizeof(GLuint64),
-			ground_texture_handles.data(),
+			gpu_ground_texture_handles.size() * sizeof(GLuint64),
+			gpu_ground_texture_handles.data(),
 			GL_DYNAMIC_STORAGE_BIT
 		);
 
@@ -669,22 +731,23 @@ export class Terrain: public QObject {
 		for (int i = -1; i < 1; i++) {
 			for (int j = -1; j < 1; j++) {
 				if (x + i >= 0 && x + i < width && y + j >= 0 && y + j < height) {
-					if (corners[x + i][y + j].cliff) {
+					const int idx = ci(x + i, y + j);
+					if (corner_cliff[idx]) {
 						if (x + i < width - 1 && y + j < height - 1) {
-							const Corner& bottom_left = corners[x + i][y + j];
-							const Corner& bottom_right = corners[x + i + 1][y + j];
-							const Corner& top_left = corners[x + i][y + j + 1];
-							const Corner& top_right = corners[x + i + 1][y + j + 1];
+							const int bl = idx;
+							const int br = ci(x + i + 1, y + j);
+							const int tl = ci(x + i, y + j + 1);
+							const int tr = ci(x + i + 1, y + j + 1);
 
-							if (bottom_left.ramp && top_left.ramp && bottom_right.ramp && top_right.ramp && !bottom_left.romp
-								&& !bottom_right.romp && !top_left.romp && !top_right.romp) {
+							if (corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr] && !corner_romp[bl]
+								&& !corner_romp[br] && !corner_romp[tl] && !corner_romp[tr]) {
 								goto out_of_loop;
 							}
 						}
 					}
 
-					if (corners[x + i][y + j].romp || corners[x + i][y + j].cliff) {
-						int texture = corners[x + i][y + j].cliff_texture;
+					if (corner_romp[idx] || corner_cliff[idx]) {
+						int texture = corner_cliff_texture[idx];
 						// Number 15 seems to be something
 						if (texture == 15) {
 							texture -= 14;
@@ -697,11 +760,12 @@ export class Terrain: public QObject {
 		}
 	out_of_loop:
 
-		if (corners[x][y].blight) {
+		const int idx = ci(x, y);
+		if (corner_blight[idx]) {
 			return blight_texture;
 		}
 
-		return corners[x][y].ground_texture;
+		return corner_ground_texture[idx];
 	}
 
 	/// The subtexture of a groundtexture to use.
@@ -734,7 +798,7 @@ export class Terrain: public QObject {
 		glm::uvec4 tiles(0xFFFF); // 0xFFFF is a transparent black pixel in the fragment shader
 		int component = 1;
 
-		tiles.x = *set.begin() + (get_tile_variation(*set.begin(), corners[x][y].ground_variation) << 16);
+		tiles.x = *set.begin() + (get_tile_variation(*set.begin(), corner_ground_variation[ci(x, y)]) << 16);
 		set.erase(set.begin());
 
 		std::bitset<4> index;
@@ -751,34 +815,38 @@ export class Terrain: public QObject {
 
 	/// Returns the height at x,y by bilinear interpolation
 	/// Set water_too to true to also take the water height into account
-	float interpolated_height(float x, float y, bool water_too) const {
+	float interpolated_height(float x, float y, const bool water_too) const {
 		x = std::clamp(x, 0.f, width - 1.01f);
 		y = std::clamp(y, 0.f, height - 1.01f);
 
-		float p1 = corners[x][y].final_ground_height();
-		float p2 = corners[std::ceil(x)][y].final_ground_height();
+		const int ix = static_cast<int>(x);
+		const int iy = static_cast<int>(y);
+		const int cx = static_cast<int>(std::ceil(x));
+		const int cy = static_cast<int>(std::ceil(y));
 
-		float p3 = corners[x][std::ceil(y)].final_ground_height();
-		float p4 = corners[std::ceil(x)][std::ceil(y)].final_ground_height();
+		float p1 = corner_final_ground_height(ix, iy);
+		float p2 = corner_final_ground_height(cx, iy);
+		float p3 = corner_final_ground_height(ix, cy);
+		float p4 = corner_final_ground_height(cx, cy);
 
-		if (water_too && corners[x][y].water) {
-			p1 = std::max(p1, corners[x][y].final_water_height(water_offset));
+		if (water_too && corner_water[ci(ix, iy)]) {
+			p1 = std::max(p1, corner_final_water_height(ix, iy));
 		}
 
-		if (water_too && corners[std::ceil(x)][y].water) {
-			p2 = std::max(p2, corners[std::ceil(x)][y].final_water_height(water_offset));
+		if (water_too && corner_water[ci(cx, iy)]) {
+			p2 = std::max(p2, corner_final_water_height(cx, iy));
 		}
 
-		if (water_too && corners[x][std::ceil(y)].water) {
-			p3 = std::max(p3, corners[x][std::ceil(y)].final_water_height(water_offset));
+		if (water_too && corner_water[ci(ix, cy)]) {
+			p3 = std::max(p3, corner_final_water_height(ix, cy));
 		}
 
-		if (water_too && corners[std::ceil(x)][std::ceil(y)].water) {
-			p4 = std::max(p4, corners[std::ceil(x)][std::ceil(y)].final_water_height(water_offset));
+		if (water_too && corner_water[ci(cx, cy)]) {
+			p4 = std::max(p4, corner_final_water_height(cx, cy));
 		}
 
-		float xx = glm::mix(p1, p2, x - floor(x));
-		float yy = glm::mix(p3, p4, x - floor(x));
+		const float xx = glm::mix(p1, p2, x - floor(x));
+		const float yy = glm::mix(p3, p4, x - floor(x));
 		return glm::mix(xx, yy, y - floor(y));
 	}
 
@@ -787,29 +855,31 @@ export class Terrain: public QObject {
 		x = std::clamp(x, 0.f, width - 1.01f);
 		y = std::clamp(y, 0.f, height - 1.01f);
 
-		float bottom_left = corners[x][y].final_ground_height(); // Is it bottom left?
-		float bottom_right = corners[x + 1.f][y].final_ground_height();
-		float top_left = corners[x][y + 1.f].final_ground_height();
-		float top_right = corners[x + 1.f][y + 1.f].final_ground_height();
+		const int ix = static_cast<int>(x);
+		const int iy = static_cast<int>(y);
+		const float bottom_left = corner_final_ground_height(ix, iy);
+		const float bottom_right = corner_final_ground_height(ix + 1, iy);
+		const float top_left = corner_final_ground_height(ix, iy + 1);
+		const float top_right = corner_final_ground_height(ix + 1, iy + 1);
 
-		float bottom = glm::mix(bottom_left, bottom_right, x - glm::floor(x));
-		float top = glm::mix(top_left, top_right, x - glm::floor(x));
+		const float bottom = glm::mix(bottom_left, bottom_right, x - glm::floor(x));
+		const float top = glm::mix(top_left, top_right, x - glm::floor(x));
 
 		return std::atan(bottom - top);
 	}
 
-	bool is_corner_ramp_entrance(int x, int y) {
+	bool is_corner_ramp_entrance(const int x, const int y) const {
 		if (x == width || y == height) {
 			return false;
 		}
 
-		Corner& bottom_left = corners[x][y];
-		Corner& bottom_right = corners[x + 1][y];
-		Corner& top_left = corners[x][y + 1];
-		Corner& top_right = corners[x + 1][y + 1];
+		const int bl = ci(x, y);
+		const int br = ci(x + 1, y);
+		const int tl = ci(x, y + 1);
+		const int tr = ci(x + 1, y + 1);
 
-		return bottom_left.ramp && top_left.ramp && bottom_right.ramp && top_right.ramp
-			&& !(bottom_left.layer_height == top_right.layer_height && top_left.layer_height == bottom_right.layer_height);
+		return corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr]
+			&& !(corner_layer_height[bl] == corner_layer_height[tr] && corner_layer_height[tl] == corner_layer_height[br]);
 	}
 
 	/// Constructs a minimap image with tile, cliff, and water colors. Other objects such as doodads will not be added here
@@ -825,15 +895,15 @@ export class Terrain: public QObject {
 			for (int i = 0; i < width; i++) {
 				glm::vec4 color;
 
-				if (corners[i][j].cliff || (i > 0 && corners[i - 1][j].cliff) || (j > 0 && corners[i][j - 1].cliff)
-					|| (i > 0 && j > 0 && corners[i - 1][j - 1].cliff)) {
+				if (corner_cliff[ci(i, j)] || (i > 0 && corner_cliff[ci(i - 1, j)]) || (j > 0 && corner_cliff[ci(i, j - 1)])
+					|| (i > 0 && j > 0 && corner_cliff[ci(i - 1, j - 1)])) {
 					color = glm::vec4(128.f, 128.f, 128.f, 255.f);
 				} else {
 					color = ground_textures[real_tile_texture(i, j)]->minimap_color;
 				}
 
-				if (corners[i][j].water && corners[i][j].final_water_height(water_offset) > corners[i][j].final_ground_height()) {
-					if (corners[i][j].final_water_height(water_offset) - corners[i][j].final_ground_height() > 0.5f) {
+				if (corner_water[ci(i, j)] && corner_final_water_height(i, j) > corner_final_ground_height(i, j)) {
+					if (corner_final_water_height(i, j) - corner_final_ground_height(i, j) > 0.5f) {
 						color *= 0.5625f;
 						color += glm::vec4(0, 0, 80, 112);
 					} else {
@@ -854,48 +924,48 @@ export class Terrain: public QObject {
 	}
 
 	void upload_ground_heights() const {
-		glNamedBufferSubData(ground_height_buffer, 0, ground_heights.size() * sizeof(float), ground_heights.data());
+		glNamedBufferSubData(ground_height_buffer, 0, corner_height.size() * sizeof(float), corner_height.data());
 	}
 
 	void upload_corner_heights() const {
-		glNamedBufferSubData(cliff_level_buffer, 0, final_ground_heights.size() * sizeof(float), final_ground_heights.data());
+		glNamedBufferSubData(cliff_level_buffer, 0, gpu_final_ground_heights.size() * sizeof(float), gpu_final_ground_heights.data());
 	}
 
 	void upload_ground_texture() const {
-		glNamedBufferSubData(ground_texture_data_buffer, 0, ground_texture_list.size() * sizeof(glm::uvec4), ground_texture_list.data());
+		glNamedBufferSubData(ground_texture_data_buffer, 0, gpu_ground_texture_list.size() * sizeof(glm::uvec4), gpu_ground_texture_list.data());
 	}
 
 	void upload_ground_exists() const {
-		glNamedBufferSubData(ground_exists_buffer, 0, ground_exists_data.size() * sizeof(uint32_t), ground_exists_data.data());
+		glNamedBufferSubData(ground_exists_buffer, 0, gpu_ground_exists_data.size() * sizeof(uint32_t), gpu_ground_exists_data.data());
 	}
 
 	void upload_water_exists() const {
-		glNamedBufferSubData(water_exists_buffer, 0, water_exists_data.size() * sizeof(uint32_t), water_exists_data.data());
+		glNamedBufferSubData(water_exists_buffer, 0, gpu_water_exists_data.size() * sizeof(uint32_t), gpu_water_exists_data.data());
 	}
 
 	void upload_water_heights() const {
-		glNamedBufferSubData(water_height_buffer, 0, water_heights.size() * sizeof(float), water_heights.data());
+		glNamedBufferSubData(water_height_buffer, 0, corner_water_height.size() * sizeof(float), corner_water_height.data());
 	}
 
 	void update_ground_heights(const QRect& area) {
 		for (int j = area.y(); j < area.y() + area.height(); j++) {
 			for (int i = area.x(); i < area.x() + area.width(); i++) {
-				ground_heights[j * width + i] = corners[i][j].height; // todo 15.998???
+				const int idx = ci(i, j);
 
 				float ramp_height = 0.f;
 				// Check if in one of the configurations the bottom_left is a ramp
 				for (int x_offset = -1; x_offset <= 0; x_offset++) {
 					for (int y_offset = -1; y_offset <= 0; y_offset++) {
 						if (i + x_offset >= 0 && i + x_offset < width - 1 && j + y_offset >= 0 && j + y_offset < height - 1) {
-							const Corner& bottom_left = corners[i + x_offset][j + y_offset];
-							const Corner& bottom_right = corners[i + 1 + x_offset][j + y_offset];
-							const Corner& top_left = corners[i + x_offset][j + 1 + y_offset];
-							const Corner& top_right = corners[i + 1 + x_offset][j + 1 + y_offset];
+							const int bl = ci(i + x_offset, j + y_offset);
+							const int br = ci(i + 1 + x_offset, j + y_offset);
+							const int tl = ci(i + x_offset, j + 1 + y_offset);
+							const int tr = ci(i + 1 + x_offset, j + 1 + y_offset);
 
 							const int base = std::min(
-								{bottom_left.layer_height, bottom_right.layer_height, top_left.layer_height, top_right.layer_height}
+								{corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]}
 							);
-							if (corners[i][j].layer_height != base) {
+							if (corner_layer_height[idx] != base) {
 								continue;
 							}
 
@@ -908,7 +978,7 @@ export class Terrain: public QObject {
 				}
 			exit_loop:
 
-				final_ground_heights[j * width + i] = corners[i][j].final_ground_height() + ramp_height;
+				gpu_final_ground_heights[j * width + i] = corner_final_ground_height(i, j) + ramp_height;
 			}
 		}
 
@@ -922,7 +992,7 @@ export class Terrain: public QObject {
 
 		for (int j = update_area.top(); j <= update_area.bottom(); j++) {
 			for (int i = update_area.left(); i <= update_area.right(); i++) {
-				ground_texture_list[j * (width - 1) + i] = get_texture_variations(i, j);
+				gpu_ground_texture_list[j * (width - 1) + i] = get_texture_variations(i, j);
 			}
 		}
 
@@ -930,12 +1000,13 @@ export class Terrain: public QObject {
 	}
 
 	void update_ground_exists(const QRect& area) {
-		QRect update_area = area.adjusted(-1, -1, 1, 1).intersected({0, 0, width - 1, height - 1});
+		const QRect update_area = area.adjusted(-1, -1, 1, 1).intersected({0, 0, width - 1, height - 1});
 
 		for (int j = update_area.top(); j <= update_area.bottom(); j++) {
 			for (int i = update_area.left(); i <= update_area.right(); i++) {
-				ground_exists_data[j * (width - 1) + i] =
-					!(((corners[i][j].cliff || corners[i][j].romp) && !is_corner_ramp_entrance(i, j)) || corners[i][j].special_doodad);
+				const int idx = ci(i, j);
+				gpu_ground_exists_data[j * (width - 1) + i] =
+					!(((corner_cliff[idx] || corner_romp[idx]) && !is_corner_ramp_entrance(i, j)) || corner_special_doodad[idx]);
 			}
 		}
 
@@ -946,8 +1017,8 @@ export class Terrain: public QObject {
 	void update_water(const QRect& area) {
 		for (int i = area.x(); i < area.x() + area.width(); i++) {
 			for (int j = area.y(); j < area.y() + area.height(); j++) {
-				water_exists_data[j * width + i] = corners[i][j].water;
-				water_heights[j * width + i] = corners[i][j].water_height;
+				const int idx = ci(i, j);
+				gpu_water_exists_data[j * width + i] = corner_water[idx];
 			}
 		}
 		upload_water_exists();
@@ -968,7 +1039,7 @@ export class Terrain: public QObject {
 
 		for (int i = area.x(); i < area.right(); i++) {
 			for (int j = area.y(); j < area.bottom(); j++) {
-				corners[i][j].romp = false;
+				corner_romp[ci(i, j)] = false;
 			}
 		}
 
@@ -977,29 +1048,27 @@ export class Terrain: public QObject {
 		// Add new cliff meshes
 		for (int i = ramp_area.x(); i < ramp_area.right(); i++) {
 			for (int j = ramp_area.y(); j < ramp_area.bottom(); j++) {
-				Corner& bottom_left = corners[i][j];
-				Corner& bottom_right = corners[i + 1][j];
-				Corner& top_left = corners[i][j + 1];
-				Corner& top_right = corners[i + 1][j + 1];
+				const int bl = ci(i, j);
+				const int br = ci(i + 1, j);
+				const int tl = ci(i, j + 1);
+				const int tr = ci(i + 1, j + 1);
 
 				// Vertical ramps
 				if (j < height - 2) {
-					const Corner& top_top_left = corners[i][j + 2];
-					const Corner& top_top_right = corners[i + 1][j + 2];
-					const int ae = std::min(bottom_left.layer_height, top_top_left.layer_height);
-					const int cf = std::min(bottom_right.layer_height, top_top_right.layer_height);
+					const int ttl = ci(i, j + 2);
+					const int ttr = ci(i + 1, j + 2);
+					const int ae = std::min(corner_layer_height[bl], corner_layer_height[ttl]);
+					const int cf = std::min(corner_layer_height[br], corner_layer_height[ttr]);
 
-					if (top_left.layer_height == ae && top_right.layer_height == cf) {
+					if (corner_layer_height[tl] == ae && corner_layer_height[tr] == cf) {
 						int base = std::min(ae, cf);
-						if (bottom_left.ramp == top_left.ramp && bottom_left.ramp == top_top_left.ramp
-							&& bottom_right.ramp == top_right.ramp && bottom_right.ramp == top_top_right.ramp
-							&& bottom_left.ramp != bottom_right.ramp) {
+						if (corner_ramp[bl] == corner_ramp[tl] && corner_ramp[bl] == corner_ramp[ttl] && corner_ramp[br] == corner_ramp[tr]
+							&& corner_ramp[br] == corner_ramp[ttr] && corner_ramp[bl] != corner_ramp[br]) {
 							std::string file_name = ""s
-								+ char((top_top_left.ramp ? 'L' : 'A') + (top_top_left.layer_height - base) * (top_top_left.ramp ? -4 : 1))
-								+ char((top_top_right.ramp ? 'L' : 'A')
-									   + (top_top_right.layer_height - base) * (top_top_right.ramp ? -4 : 1))
-								+ char((bottom_right.ramp ? 'L' : 'A') + (bottom_right.layer_height - base) * (bottom_right.ramp ? -4 : 1))
-								+ char((bottom_left.ramp ? 'L' : 'A') + (bottom_left.layer_height - base) * (bottom_left.ramp ? -4 : 1));
+								+ char((corner_ramp[ttl] ? 'L' : 'A') + (corner_layer_height[ttl] - base) * (corner_ramp[ttl] ? -4 : 1))
+								+ char((corner_ramp[ttr] ? 'L' : 'A') + (corner_layer_height[ttr] - base) * (corner_ramp[ttr] ? -4 : 1))
+								+ char((corner_ramp[br] ? 'L' : 'A') + (corner_layer_height[br] - base) * (corner_ramp[br] ? -4 : 1))
+								+ char((corner_ramp[bl] ? 'L' : 'A') + (corner_layer_height[bl] - base) * (corner_ramp[bl] ? -4 : 1));
 
 							file_name = "doodads/terrain/clifftrans/clifftrans" + file_name + "0.mdx";
 							if (hierarchy.file_exists(file_name)) {
@@ -1009,8 +1078,8 @@ export class Terrain: public QObject {
 								}
 
 								cliffs.emplace_back(i, j, path_to_cliff[file_name]);
-								bottom_left.romp = true;
-								top_left.romp = true;
+								corner_romp[bl] = true;
+								corner_romp[tl] = true;
 
 								continue;
 							}
@@ -1020,23 +1089,20 @@ export class Terrain: public QObject {
 
 				// Horizontal ramps
 				if (i < width - 2) {
-					const Corner& bottom_right_right = corners[i + 2][j];
-					const Corner& top_right_right = corners[i + 2][j + 1];
-					const int ae = std::min(bottom_left.layer_height, bottom_right_right.layer_height);
-					const int bf = std::min(top_left.layer_height, top_right_right.layer_height);
+					const int brr = ci(i + 2, j);
+					const int trr = ci(i + 2, j + 1);
+					const int ae = std::min(corner_layer_height[bl], corner_layer_height[brr]);
+					const int bf = std::min(corner_layer_height[tl], corner_layer_height[trr]);
 
-					if (bottom_right.layer_height == ae && top_right.layer_height == bf) {
+					if (corner_layer_height[br] == ae && corner_layer_height[tr] == bf) {
 						int base = std::min(ae, bf);
-						if (bottom_left.ramp == bottom_right.ramp && bottom_left.ramp == bottom_right_right.ramp
-							&& top_left.ramp == top_right.ramp && top_left.ramp == top_right_right.ramp
-							&& bottom_left.ramp != top_left.ramp) {
+						if (corner_ramp[bl] == corner_ramp[br] && corner_ramp[bl] == corner_ramp[brr] && corner_ramp[tl] == corner_ramp[tr]
+							&& corner_ramp[tl] == corner_ramp[trr] && corner_ramp[bl] != corner_ramp[tl]) {
 							std::string file_name = ""s
-								+ char((top_left.ramp ? 'L' : 'A') + (top_left.layer_height - base) * (top_left.ramp ? -4 : 1))
-								+ char((top_right_right.ramp ? 'L' : 'A')
-									   + (top_right_right.layer_height - base) * (top_right_right.ramp ? -4 : 1))
-								+ char((bottom_right_right.ramp ? 'L' : 'A')
-									   + (bottom_right_right.layer_height - base) * (bottom_right_right.ramp ? -4 : 1))
-								+ char((bottom_left.ramp ? 'L' : 'A') + (bottom_left.layer_height - base) * (bottom_left.ramp ? -4 : 1));
+								+ char((corner_ramp[tl] ? 'L' : 'A') + (corner_layer_height[tl] - base) * (corner_ramp[tl] ? -4 : 1))
+								+ char((corner_ramp[trr] ? 'L' : 'A') + (corner_layer_height[trr] - base) * (corner_ramp[trr] ? -4 : 1))
+								+ char((corner_ramp[brr] ? 'L' : 'A') + (corner_layer_height[brr] - base) * (corner_ramp[brr] ? -4 : 1))
+								+ char((corner_ramp[bl] ? 'L' : 'A') + (corner_layer_height[bl] - base) * (corner_ramp[bl] ? -4 : 1));
 
 							file_name = "doodads/terrain/clifftrans/clifftrans" + file_name + "0.mdx";
 							if (hierarchy.file_exists(file_name)) {
@@ -1046,8 +1112,8 @@ export class Terrain: public QObject {
 								}
 
 								cliffs.emplace_back(i, j, path_to_cliff[file_name]);
-								bottom_left.romp = true;
-								bottom_right.romp = true;
+								corner_romp[bl] = true;
+								corner_romp[br] = true;
 
 								continue;
 							}
@@ -1055,7 +1121,7 @@ export class Terrain: public QObject {
 					}
 				}
 
-				if (!bottom_left.cliff || bottom_left.romp) {
+				if (!corner_cliff[bl] || corner_romp[bl]) {
 					continue;
 				}
 
@@ -1064,18 +1130,18 @@ export class Terrain: public QObject {
 				}
 
 				const int base =
-					std::min({bottom_left.layer_height, bottom_right.layer_height, top_left.layer_height, top_right.layer_height});
+					std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
 
 				// Cliff model path
-				std::string file_name = ""s + char('A' + top_left.layer_height - base) + char('A' + top_right.layer_height - base)
-					+ char('A' + bottom_right.layer_height - base) + char('A' + bottom_left.layer_height - base);
+				std::string file_name = ""s + char('A' + corner_layer_height[tl] - base) + char('A' + corner_layer_height[tr] - base)
+					+ char('A' + corner_layer_height[br] - base) + char('A' + corner_layer_height[bl] - base);
 
 				if (file_name == "AAAA") {
 					continue;
 				}
 
 				// Clamp to within max variations
-				file_name += std::to_string(std::clamp(bottom_left.cliff_variation, 0, cliff_variations[file_name]));
+				file_name += std::to_string(std::clamp(corner_cliff_variation[bl], 0, cliff_variations[file_name]));
 
 				cliffs.emplace_back(i, j, path_to_cliff[file_name]);
 			}
@@ -1088,35 +1154,35 @@ export class Terrain: public QObject {
 	/// Takes cliffs, blight, water, terrain textures and boundaries into account
 	uint8_t get_terrain_pathing(size_t i, size_t j) {
 		// map pathing cell to corner
-		int corner_x = i / 4;
-		int corner_y = j / 4;
-		const Corner& bottom_left = corners[corner_x][corner_y];
+		int cx = i / 4;
+		int cy = j / 4;
+		const int bl_idx = ci(cx, cy);
 
 		// take terrain texture into account (from the closest corner)
 		int x = static_cast<int>(std::round(i / 4.0));
 		int y = static_cast<int>(std::round(j / 4.0));
-		const Corner& closest_corner = corners[x][y];
-		uint8_t mask = pathing_options[tileset_ids[closest_corner.ground_texture]].mask();
+		const int closest_idx = ci(x, y);
+		uint8_t mask = pathing_options[tileset_ids[corner_ground_texture[closest_idx]]].mask();
 
 		// cliffs are unbuildable and unwalkable
-		if (bottom_left.cliff) {
+		if (corner_cliff[bl_idx]) {
 			mask |= PathingMap::unbuildable | PathingMap::unwalkable;
 		}
 
 		// take blight into account
-		if (closest_corner.blight) {
+		if (corner_blight[closest_idx]) {
 			mask |= PathingMap::blight;
 		}
 
 		// take water into account
-		if (closest_corner.water) {
+		if (corner_water[closest_idx]) {
 			// apply water mask
 			mask |= PathingMap::water;
 
-			if (closest_corner.final_water_height(water_offset) > closest_corner.final_ground_height() + 0.40) {
+			if (corner_final_water_height(x, y) > corner_final_ground_height(x, y) + 0.40) {
 				// deep water is unwalkable and unbuildable
 				mask |= PathingMap::unbuildable | PathingMap::unwalkable;
-			} else if (closest_corner.final_water_height(water_offset) > closest_corner.final_ground_height()) {
+			} else if (corner_final_water_height(x, y) > corner_final_ground_height(x, y)) {
 				// shallow water is unbuildable
 				mask |= PathingMap::unbuildable;
 			}
@@ -1125,7 +1191,7 @@ export class Terrain: public QObject {
 		// boundaries and map edges are unwalkable, unflyable and unbuildable¸
 		// NOTE: game handles corners/boundaries differently
 		// if the bottom-left corner is a boundary, then the entire 4x4 cell is considered a boundary
-		if (bottom_left.map_edge || bottom_left.boundary) {
+		if (corner_map_edge[bl_idx] || corner_boundary[bl_idx]) {
 			mask |= PathingMap::unbuildable | PathingMap::unflyable | PathingMap::unwalkable;
 		}
 
@@ -1137,7 +1203,7 @@ export class Terrain: public QObject {
 		// places "shadows" on the edges of the map
 		for (size_t i = 0; i < width; i++) {
 			for (size_t j = 0; j < height; j++) {
-				corners[i][j].map_edge =
+				corner_map_edge[ci(i, j)] =
 					i < unplayable_left || i >= width - unplayable_right || j < unplayable_bottom || j >= height - unplayable_top;
 			}
 		}
@@ -1162,12 +1228,11 @@ export class Terrain: public QObject {
 		}
 
 		// create and setup
-		std::vector<std::vector<Corner>> new_corners = resize_corners(delta_left, delta_right, delta_top, delta_bottom);
+		resize_corner_data(delta_left, delta_right, delta_top, delta_bottom, new_width, new_height);
 
 		// update terrain object
 		width = new_width;
 		height = new_height;
-		corners = new_corners;
 		offset.x -= delta_left * 128;
 		offset.y -= delta_bottom * 128;
 
@@ -1181,56 +1246,96 @@ export class Terrain: public QObject {
 	}
 
   private:
-	std::vector<std::vector<Corner>> resize_corners(int delta_left, int delta_right, int delta_top, int delta_bottom) const {
-		const int new_width = width + delta_left + delta_right;
-		const int new_height = height + delta_top + delta_bottom;
+	void resize_corner_data(int delta_left, int delta_right, int delta_top, int delta_bottom, int new_width, int new_height) {
+		const int new_total = new_width * new_height;
+		// Helper lambda to compute new index
+		auto new_ci = [new_width](int x, int y) {
+			return y * new_width + x;
+		};
 
-		// initialise new corner vector
-		std::vector<std::vector<Corner>> new_corners(new_width, std::vector<Corner>(new_height));
+		// Allocate new SoA arrays with defaults
+		std::vector<float> new_height_arr(new_total, 0.f);
+		std::vector<float> new_water_height(new_total, 0.f);
+		std::vector<int> new_ground_texture(new_total, 0);
+		std::vector<int> new_ground_variation(new_total, 0);
+		std::vector<int> new_cliff_variation(new_total, 0);
+		std::vector<int> new_cliff_texture(new_total, 15);
+		std::vector<int> new_layer_height(new_total, 2);
+		std::vector<uint8_t> new_map_edge(new_total, 0);
+		std::vector<uint8_t> new_ramp(new_total, 0);
+		std::vector<uint8_t> new_blight(new_total, 0);
+		std::vector<uint8_t> new_water(new_total, 0);
+		std::vector<uint8_t> new_boundary(new_total, 0);
+		std::vector<uint8_t> new_cliff(new_total, 0);
+		std::vector<uint8_t> new_romp(new_total, 0);
+		std::vector<uint8_t> new_special_doodad(new_total, 0);
 
 		// check if all old corners would be removed
 		int old_width_remaining = (int)width + std::min(0, delta_left) + std::min(0, delta_right);
 		int old_height_remaining = (int)height + std::min(0, delta_bottom) + std::min(0, delta_top);
 		if (old_width_remaining <= 0 || old_height_remaining <= 0) {
 			// all old corners deleted, fill with default
-			for (size_t i = 0; i < new_width; i++) {
-				for (size_t j = 0; j < new_height; j++) {
-					// apply random tile variation and fix map_edge flag
-					new_corners[i][j].set_random_variation();
-					new_corners[i][j].map_edge = (i == 0 || i == new_width - 1 || j == 0 || j == new_height - 1);
+			for (int i = 0; i < new_width; i++) {
+				for (int j = 0; j < new_height; j++) {
+					const int idx = new_ci(i, j);
+					new_ground_variation[idx] = random_ground_variation();
+					new_map_edge[idx] = (i == 0 || i == new_width - 1 || j == 0 || j == new_height - 1);
 				}
 			}
-			return new_corners;
-		}
+		} else {
+			// fill by mapping from old corners
+			for (int i = 0; i < new_width; i++) {
+				for (int j = 0; j < new_height; j++) {
+					int old_i = i - delta_left;
+					int old_j = j - delta_bottom;
 
-		// fill the new corners by mapping from old corners
-		for (size_t i = 0; i < new_width; i++) {
-			for (size_t j = 0; j < new_height; j++) {
-				// map new position to old position
-				int old_i = (int)i - delta_left;
-				int old_j = (int)j - delta_bottom;
+					bool is_old_corner = (old_i >= 0 && old_i < width && old_j >= 0 && old_j < height);
 
-				// check if this is an old corner (before clamping)
-				bool is_old_corner = (old_i >= 0 && old_i < (int)width && old_j >= 0 && old_j < (int)height);
+					old_i = std::clamp(old_i, 0, width - 1);
+					old_j = std::clamp(old_j, 0, height - 1);
 
-				// clamp to valid old range
-				old_i = std::clamp(old_i, 0, (int)width - 1);
-				old_j = std::clamp(old_j, 0, (int)height - 1);
+					const int new_idx = new_ci(i, j);
+					const int old_idx = ci(old_i, old_j);
 
-				new_corners[i][j] = corners[old_i][old_j];
+					new_height_arr[new_idx] = corner_height[old_idx];
+					new_water_height[new_idx] = corner_water_height[old_idx];
+					new_ground_texture[new_idx] = corner_ground_texture[old_idx];
+					new_ground_variation[new_idx] = corner_ground_variation[old_idx];
+					new_cliff_variation[new_idx] = corner_cliff_variation[old_idx];
+					new_cliff_texture[new_idx] = corner_cliff_texture[old_idx];
+					new_layer_height[new_idx] = corner_layer_height[old_idx];
+					new_map_edge[new_idx] = corner_map_edge[old_idx];
+					new_ramp[new_idx] = corner_ramp[old_idx];
+					new_blight[new_idx] = corner_blight[old_idx];
+					new_water[new_idx] = corner_water[old_idx];
+					new_boundary[new_idx] = corner_boundary[old_idx];
+					new_cliff[new_idx] = corner_cliff[old_idx];
+					new_romp[new_idx] = corner_romp[old_idx];
+					new_special_doodad[new_idx] = corner_special_doodad[old_idx];
 
-				// fix map_edge flag for all corners
-				//new_corners[i][j].map_edge = (i == 0 || i == new_width - 1 || j == 0 || j == new_height - 1);
-
-				// apply random variations and fix special_doodad for NEW corners
-				if (!is_old_corner) {
-					new_corners[i][j].special_doodad = false;
-					new_corners[i][j].set_random_variation();
+					if (!is_old_corner) {
+						new_special_doodad[new_idx] = false;
+						new_ground_variation[new_idx] = random_ground_variation();
+					}
 				}
 			}
 		}
 
-		return new_corners;
+		corner_height = std::move(new_height_arr);
+		corner_water_height = std::move(new_water_height);
+		corner_ground_texture = std::move(new_ground_texture);
+		corner_ground_variation = std::move(new_ground_variation);
+		corner_cliff_variation = std::move(new_cliff_variation);
+		corner_cliff_texture = std::move(new_cliff_texture);
+		corner_layer_height = std::move(new_layer_height);
+		corner_map_edge = std::move(new_map_edge);
+		corner_ramp = std::move(new_ramp);
+		corner_blight = std::move(new_blight);
+		corner_water = std::move(new_water);
+		corner_boundary = std::move(new_boundary);
+		corner_cliff = std::move(new_cliff);
+		corner_romp = std::move(new_romp);
+		corner_special_doodad = std::move(new_special_doodad);
 	}
 
 	void re_render(Physics& physics) {
@@ -1246,11 +1351,7 @@ export class Terrain: public QObject {
 		cliffs.clear();
 
 		// clear romp flags on all corners
-		for (int i = 0; i < width; i++) {
-			for (int j = 0; j < height; j++) {
-				corners[i][j].romp = false;
-			}
-		}
+		std::fill(corner_romp.begin(), corner_romp.end(), 0);
 
 		// determine cliff flags for all corners
 		compute_cliff_flags();
@@ -1274,25 +1375,23 @@ export class Terrain: public QObject {
 	void compute_cliff_flags() {
 		for (int i = 0; i < width - 1; i++) {
 			for (int j = 0; j < height - 1; j++) {
-				Corner& bottom_left = corners[i][j];
-				Corner& bottom_right = corners[i + 1][j];
-				Corner& top_left = corners[i][j + 1];
-				Corner& top_right = corners[i + 1][j + 1];
+				const int bl = ci(i, j);
+				const int br = ci(i + 1, j);
+				const int tl = ci(i, j + 1);
+				const int tr = ci(i + 1, j + 1);
 
-				bottom_left.cliff = bottom_left.layer_height != bottom_right.layer_height
-					|| bottom_left.layer_height != top_left.layer_height || bottom_left.layer_height != top_right.layer_height;
+				corner_cliff[bl] = corner_layer_height[bl] != corner_layer_height[br] || corner_layer_height[bl] != corner_layer_height[tl]
+					|| corner_layer_height[bl] != corner_layer_height[tr];
 			}
 		}
 	}
 
 	void setup_GPU_buffers() {
-		// setup vectors
-		ground_heights.resize(width * height);
-		final_ground_heights.resize(width * height);
-		ground_texture_list.resize((width - 1) * (height - 1));
-		ground_exists_data.resize(width * height);
-		water_heights.resize(width * height);
-		water_exists_data.resize(width * height);
+		// setup derived GPU vectors
+		gpu_final_ground_heights.resize(width * height);
+		gpu_ground_texture_list.resize((width - 1) * (height - 1));
+		gpu_ground_exists_data.resize(width * height);
+		gpu_water_exists_data.resize(width * height);
 
 		// ground buffers
 		glCreateBuffers(1, &ground_height_buffer);
@@ -1312,7 +1411,7 @@ export class Terrain: public QObject {
 	}
 
 	void setup_collision_shape(const Physics& physics) {
-		collision_shape = new btHeightfieldTerrainShape(width, height, final_ground_heights.data(), 0, -16.f, 16.f, 2, PHY_FLOAT, false);
+		collision_shape = new btHeightfieldTerrainShape(width, height, gpu_final_ground_heights.data(), 0, -16.f, 16.f, 2, PHY_FLOAT, false);
 		collision_body = new btRigidBody(0, new btDefaultMotionState(), collision_shape);
 		collision_body->getWorldTransform().setOrigin(btVector3(width / 2.f - 0.5f, height / 2.f - 0.5f, 0.f));
 		collision_body->setCollisionFlags(collision_body->getCollisionFlags() | btCollisionObject::CF_STATIC_OBJECT);
