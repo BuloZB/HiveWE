@@ -135,7 +135,7 @@ void TerrainBrush::apply_begin() {
 	texture_height_area = area;
 	cliff_area = area;
 
-	const int center_idx = terrain.ci(center_x, center_y);
+	const size_t center_idx = terrain.ci(center_x, center_y);
 
 	if (apply_height) {
 		deformation_height = terrain.corner_height[center_idx];
@@ -214,7 +214,7 @@ void TerrainBrush::apply(double frame_delta) {
 					}
 				}
 
-				const int idx = terrain.ci(i, j);
+				const size_t idx = terrain.ci(i, j);
 				if (id == terrain.blight_texture) {
 					// Blight shouldn't be set when there is a cliff near
 					if (cliff_near) {
@@ -239,7 +239,7 @@ void TerrainBrush::apply(double frame_delta) {
 
 		for (int i = area.x(); i < area.x() + area.width(); i++) {
 			for (int j = area.y(); j < area.y() + area.height(); j++) {
-				const int idx = terrain.ci(i, j);
+				const size_t idx = terrain.ci(i, j);
 				float new_height = terrain.corner_height[idx];
 				heights[i - area.x()][j - area.y()] = new_height;
 
@@ -334,7 +334,7 @@ void TerrainBrush::apply(double frame_delta) {
 				if (!contains(glm::ivec2(i - area.x(), j - area.y()) - glm::min(glm::ivec2(position) + 1, 0))) {
 					continue;
 				}
-				const int idx = terrain.ci(i, j);
+				const size_t idx = terrain.ci(i, j);
 				terrain.corner_ramp[idx] = false;
 				terrain.corner_layer_height[idx] = layer_height;
 
@@ -374,10 +374,10 @@ void TerrainBrush::apply(double frame_delta) {
 		// Determine if cliff
 		for (int i = updated_area.x(); i <= updated_area.right(); i++) {
 			for (int j = updated_area.y(); j <= updated_area.bottom(); j++) {
-				const int bl = terrain.ci(i, j);
-				const int br = terrain.ci(i + 1, j);
-				const int tl = terrain.ci(i, j + 1);
-				const int tr = terrain.ci(i + 1, j + 1);
+				const size_t bl = terrain.ci(i, j);
+				const size_t br = terrain.ci(i + 1, j);
+				const size_t tl = terrain.ci(i, j + 1);
+				const size_t tr = terrain.ci(i + 1, j + 1);
 
 				terrain.corner_cliff[bl] = terrain.corner_layer_height[bl] != terrain.corner_layer_height[br]
 					|| terrain.corner_layer_height[bl] != terrain.corner_layer_height[tl] || terrain.corner_layer_height[bl] != terrain.corner_layer_height[tr];
@@ -405,7 +405,7 @@ void TerrainBrush::apply(double frame_delta) {
 	// Apply pathing
 	for (int i = updated_area.x(); i <= updated_area.right(); i++) {
 		for (int j = updated_area.y(); j <= updated_area.bottom(); j++) {
-			const int bl_idx = terrain.ci(i, j);
+			const size_t bl_idx = terrain.ci(i, j);
 
 			for (int k = 0; k < 4; k++) {
 				for (int l = 0; l < 4; l++) {
@@ -419,7 +419,7 @@ void TerrainBrush::apply(double frame_delta) {
 					if (!terrain.corner_cliff[bl_idx] || (terrain.corner_ramp[bl_idx] && !terrain.corner_romp[bl_idx])) {
 						const int cx = i + k / 2;
 						const int cy = j + l / 2;
-						const int cidx = terrain.ci(cx, cy);
+						const size_t cidx = terrain.ci(cx, cy);
 						if (apply_tile_pathing) {
 							const int id = terrain.corner_ground_texture[cidx];
 							mask |= terrain.pathing_options[terrain.tileset_ids[id]].mask();

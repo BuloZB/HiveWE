@@ -159,21 +159,21 @@ export class Terrain: public QObject {
 	std::vector<uint8_t> corner_romp;
 	std::vector<uint8_t> corner_special_doodad;
 
-	int ci(const int x, const int y) const {
+	size_t ci(const size_t x, const size_t y) const {
 		return y * width + x;
 	}
 
-	float corner_final_ground_height(int x, int y) const {
-		const int idx = ci(x, y);
+	float corner_final_ground_height(const int x, const int y) const {
+		const size_t idx = ci(x, y);
 		return corner_height[idx] + corner_layer_height[idx] - 2.0f;
 	}
 
-	float corner_final_water_height(int x, int y) const {
+	float corner_final_water_height(const int x, const int y) const {
 		return corner_water_height[ci(x, y)] + water_offset;
 	}
 
 	Corner get_corner(int x, int y) const {
-		const int idx = ci(x, y);
+		const size_t idx = ci(x, y);
 		Corner c;
 		c.height = corner_height[idx];
 		c.water_height = corner_water_height[idx];
@@ -194,7 +194,7 @@ export class Terrain: public QObject {
 	}
 
 	void set_corner(int x, int y, const Corner& c) {
-		const int idx = ci(x, y);
+		const size_t idx = ci(x, y);
 		corner_height[idx] = c.height;
 		corner_water_height[idx] = c.water_height;
 		corner_ground_texture[idx] = c.ground_texture;
@@ -318,7 +318,7 @@ export class Terrain: public QObject {
 		resize_corner_arrays(width * height);
 		for (int j = 0; j < height; j++) {
 			for (int i = 0; i < width; i++) {
-				const int idx = ci(i, j);
+				const size_t idx = ci(i, j);
 
 				corner_height[idx] = (reader.read<uint16_t>() - 8192.f) / 512.f;
 
@@ -611,10 +611,10 @@ export class Terrain: public QObject {
 
 		// Render cliffs
 		for (const auto& i : cliffs) {
-			const int bl = ci(i.x, i.y);
-			const int br = ci(i.x + 1, i.y);
-			const int tl = ci(i.x, i.y + 1);
-			const int tr = ci(i.x + 1, i.y + 1);
+			const size_t bl = ci(i.x, i.y);
+			const size_t br = ci(i.x + 1, i.y);
+			const size_t tl = ci(i.x, i.y + 1);
+			const size_t tr = ci(i.x + 1, i.y + 1);
 
 			if (corner_special_doodad[bl]) {
 				continue;
@@ -731,13 +731,13 @@ export class Terrain: public QObject {
 		for (int i = -1; i < 1; i++) {
 			for (int j = -1; j < 1; j++) {
 				if (x + i >= 0 && x + i < width && y + j >= 0 && y + j < height) {
-					const int idx = ci(x + i, y + j);
+					const size_t idx = ci(x + i, y + j);
 					if (corner_cliff[idx]) {
 						if (x + i < width - 1 && y + j < height - 1) {
-							const int bl = idx;
-							const int br = ci(x + i + 1, y + j);
-							const int tl = ci(x + i, y + j + 1);
-							const int tr = ci(x + i + 1, y + j + 1);
+							const size_t bl = idx;
+							const size_t br = ci(x + i + 1, y + j);
+							const size_t tl = ci(x + i, y + j + 1);
+							const size_t tr = ci(x + i + 1, y + j + 1);
 
 							if (corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr] && !corner_romp[bl]
 								&& !corner_romp[br] && !corner_romp[tl] && !corner_romp[tr]) {
@@ -760,7 +760,7 @@ export class Terrain: public QObject {
 		}
 	out_of_loop:
 
-		const int idx = ci(x, y);
+		const size_t idx = ci(x, y);
 		if (corner_blight[idx]) {
 			return blight_texture;
 		}
@@ -873,10 +873,10 @@ export class Terrain: public QObject {
 			return false;
 		}
 
-		const int bl = ci(x, y);
-		const int br = ci(x + 1, y);
-		const int tl = ci(x, y + 1);
-		const int tr = ci(x + 1, y + 1);
+		const size_t bl = ci(x, y);
+		const size_t br = ci(x + 1, y);
+		const size_t tl = ci(x, y + 1);
+		const size_t tr = ci(x + 1, y + 1);
 
 		return corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr]
 			&& !(corner_layer_height[bl] == corner_layer_height[tr] && corner_layer_height[tl] == corner_layer_height[br]);
@@ -950,17 +950,17 @@ export class Terrain: public QObject {
 	void update_ground_heights(const QRect& area) {
 		for (int j = area.y(); j < area.y() + area.height(); j++) {
 			for (int i = area.x(); i < area.x() + area.width(); i++) {
-				const int idx = ci(i, j);
+				const size_t idx = ci(i, j);
 
 				float ramp_height = 0.f;
 				// Check if in one of the configurations the bottom_left is a ramp
 				for (int x_offset = -1; x_offset <= 0; x_offset++) {
 					for (int y_offset = -1; y_offset <= 0; y_offset++) {
 						if (i + x_offset >= 0 && i + x_offset < width - 1 && j + y_offset >= 0 && j + y_offset < height - 1) {
-							const int bl = ci(i + x_offset, j + y_offset);
-							const int br = ci(i + 1 + x_offset, j + y_offset);
-							const int tl = ci(i + x_offset, j + 1 + y_offset);
-							const int tr = ci(i + 1 + x_offset, j + 1 + y_offset);
+							const size_t bl = ci(i + x_offset, j + y_offset);
+							const size_t br = ci(i + 1 + x_offset, j + y_offset);
+							const size_t tl = ci(i + x_offset, j + 1 + y_offset);
+							const size_t tr = ci(i + 1 + x_offset, j + 1 + y_offset);
 
 							const int base = std::min(
 								{corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]}
@@ -1004,7 +1004,7 @@ export class Terrain: public QObject {
 
 		for (int j = update_area.top(); j <= update_area.bottom(); j++) {
 			for (int i = update_area.left(); i <= update_area.right(); i++) {
-				const int idx = ci(i, j);
+				const size_t idx = ci(i, j);
 				gpu_ground_exists_data[j * (width - 1) + i] =
 					!(((corner_cliff[idx] || corner_romp[idx]) && !is_corner_ramp_entrance(i, j)) || corner_special_doodad[idx]);
 			}
@@ -1017,7 +1017,7 @@ export class Terrain: public QObject {
 	void update_water(const QRect& area) {
 		for (int i = area.x(); i < area.x() + area.width(); i++) {
 			for (int j = area.y(); j < area.y() + area.height(); j++) {
-				const int idx = ci(i, j);
+				const size_t idx = ci(i, j);
 				gpu_water_exists_data[j * width + i] = corner_water[idx];
 			}
 		}
@@ -1048,15 +1048,15 @@ export class Terrain: public QObject {
 		// Add new cliff meshes
 		for (int i = ramp_area.x(); i < ramp_area.right(); i++) {
 			for (int j = ramp_area.y(); j < ramp_area.bottom(); j++) {
-				const int bl = ci(i, j);
-				const int br = ci(i + 1, j);
-				const int tl = ci(i, j + 1);
-				const int tr = ci(i + 1, j + 1);
+				const size_t bl = ci(i, j);
+				const size_t br = ci(i + 1, j);
+				const size_t tl = ci(i, j + 1);
+				const size_t tr = ci(i + 1, j + 1);
 
 				// Vertical ramps
 				if (j < height - 2) {
-					const int ttl = ci(i, j + 2);
-					const int ttr = ci(i + 1, j + 2);
+					const size_t ttl = ci(i, j + 2);
+					const size_t ttr = ci(i + 1, j + 2);
 					const int ae = std::min(corner_layer_height[bl], corner_layer_height[ttl]);
 					const int cf = std::min(corner_layer_height[br], corner_layer_height[ttr]);
 
@@ -1089,8 +1089,8 @@ export class Terrain: public QObject {
 
 				// Horizontal ramps
 				if (i < width - 2) {
-					const int brr = ci(i + 2, j);
-					const int trr = ci(i + 2, j + 1);
+					const size_t brr = ci(i + 2, j);
+					const size_t trr = ci(i + 2, j + 1);
 					const int ae = std::min(corner_layer_height[bl], corner_layer_height[brr]);
 					const int bf = std::min(corner_layer_height[tl], corner_layer_height[trr]);
 
@@ -1156,12 +1156,12 @@ export class Terrain: public QObject {
 		// map pathing cell to corner
 		int cx = i / 4;
 		int cy = j / 4;
-		const int bl_idx = ci(cx, cy);
+		const size_t bl_idx = ci(cx, cy);
 
 		// take terrain texture into account (from the closest corner)
 		int x = static_cast<int>(std::round(i / 4.0));
 		int y = static_cast<int>(std::round(j / 4.0));
-		const int closest_idx = ci(x, y);
+		const size_t closest_idx = ci(x, y);
 		uint8_t mask = pathing_options[tileset_ids[corner_ground_texture[closest_idx]]].mask();
 
 		// cliffs are unbuildable and unwalkable
@@ -1249,7 +1249,7 @@ export class Terrain: public QObject {
 	void resize_corner_data(int delta_left, int delta_right, int delta_top, int delta_bottom, int new_width, int new_height) {
 		const int new_total = new_width * new_height;
 		// Helper lambda to compute new index
-		auto new_ci = [new_width](int x, int y) {
+		auto new_ci = [new_width](size_t x, size_t y) -> size_t {
 			return y * new_width + x;
 		};
 
@@ -1277,7 +1277,7 @@ export class Terrain: public QObject {
 			// all old corners deleted, fill with default
 			for (int i = 0; i < new_width; i++) {
 				for (int j = 0; j < new_height; j++) {
-					const int idx = new_ci(i, j);
+					const size_t idx = new_ci(i, j);
 					new_ground_variation[idx] = random_ground_variation();
 					new_map_edge[idx] = (i == 0 || i == new_width - 1 || j == 0 || j == new_height - 1);
 				}
@@ -1294,8 +1294,8 @@ export class Terrain: public QObject {
 					old_i = std::clamp(old_i, 0, width - 1);
 					old_j = std::clamp(old_j, 0, height - 1);
 
-					const int new_idx = new_ci(i, j);
-					const int old_idx = ci(old_i, old_j);
+					const size_t new_idx = new_ci(i, j);
+					const size_t old_idx = ci(old_i, old_j);
 
 					new_height_arr[new_idx] = corner_height[old_idx];
 					new_water_height[new_idx] = corner_water_height[old_idx];
@@ -1375,10 +1375,10 @@ export class Terrain: public QObject {
 	void compute_cliff_flags() {
 		for (int i = 0; i < width - 1; i++) {
 			for (int j = 0; j < height - 1; j++) {
-				const int bl = ci(i, j);
-				const int br = ci(i + 1, j);
-				const int tl = ci(i, j + 1);
-				const int tr = ci(i + 1, j + 1);
+				const size_t bl = ci(i, j);
+				const size_t br = ci(i + 1, j);
+				const size_t tl = ci(i, j + 1);
+				const size_t tr = ci(i + 1, j + 1);
 
 				corner_cliff[bl] = corner_layer_height[bl] != corner_layer_height[br] || corner_layer_height[bl] != corner_layer_height[tl]
 					|| corner_layer_height[bl] != corner_layer_height[tr];
