@@ -156,6 +156,8 @@ export class Terrain: public QObject {
 	std::vector<uint8_t> corner_water;
 	std::vector<uint8_t> corner_boundary;
 	std::vector<uint8_t> corner_cliff;
+	/// Not the greatest name, but this indicates whether this tile contains a cliff transition.
+	/// As cliff transitions stick out 1 tile from the cliff the cliff flag is not set for half the `romps`
 	std::vector<uint8_t> corner_romp;
 	std::vector<uint8_t> corner_special_doodad;
 
@@ -212,7 +214,7 @@ export class Terrain: public QObject {
 		corner_special_doodad[idx] = c.special_doodad;
 	}
 
-	void resize_corner_arrays(int total) {
+	void resize_corner_arrays(size_t total) {
 		corner_height.assign(total, 0.f);
 		corner_water_height.assign(total, 0.f);
 		corner_ground_texture.assign(total, 0);
@@ -285,7 +287,7 @@ export class Terrain: public QObject {
 		//delete collision_shape;
 	}
 
-	bool load(Physics& physics) {
+	bool load(const Physics& physics) {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3e").value();
 
 		const std::string magic_number = reader.read_string(4);
@@ -316,42 +318,38 @@ export class Terrain: public QObject {
 
 		// Parse all tilepoints
 		resize_corner_arrays(width * height);
-		for (int j = 0; j < height; j++) {
-			for (int i = 0; i < width; i++) {
-				const size_t idx = ci(i, j);
+		for (size_t i = 0; i < width * height; i++) {
+			corner_height[i] = (reader.read<uint16_t>() - 8192.f) / 512.f;
 
-				corner_height[idx] = (reader.read<uint16_t>() - 8192.f) / 512.f;
+			const uint16_t water_and_edge = reader.read<uint16_t>();
+			corner_water_height[i] = ((water_and_edge & 0x3FFF) - 8192.f) / 512.f;
+			corner_map_edge[i] = (water_and_edge & 0x4000) != 0;
 
-				const uint16_t water_and_edge = reader.read<uint16_t>();
-				corner_water_height[idx] = ((water_and_edge & 0x3FFF) - 8192.f) / 512.f;
-				corner_map_edge[idx] = (water_and_edge & 0x4000) != 0;
+			if (version >= 12) {
+				const uint16_t texture_and_flags = reader.read<uint16_t>();
+				corner_ground_texture[i] = texture_and_flags & 0b00'0000'0011'1111;
 
-				if (version >= 12) {
-					const uint16_t texture_and_flags = reader.read<uint16_t>();
-					corner_ground_texture[idx] = texture_and_flags & 0b00'0000'0011'1111;
+				corner_ramp[i] = (texture_and_flags & 0b00'0100'0000) != 0;
+				corner_blight[i] = (texture_and_flags & 0b00'1000'0000) != 0;
+				corner_water[i] = (texture_and_flags & 0b01'0000'0000) != 0;
+				corner_boundary[i] = (texture_and_flags & 0b10'0000'0000) != 0;
+			} else {
+				const uint8_t texture_and_flags = reader.read<uint8_t>();
+				corner_ground_texture[i] = texture_and_flags & 0b0000'1111;
 
-					corner_ramp[idx] = (texture_and_flags & 0b00'0100'0000) != 0;
-					corner_blight[idx] = (texture_and_flags & 0b00'1000'0000) != 0;
-					corner_water[idx] = (texture_and_flags & 0b01'0000'0000) != 0;
-					corner_boundary[idx] = (texture_and_flags & 0b10'0000'0000) != 0;
-				} else {
-					const uint8_t texture_and_flags = reader.read<uint8_t>();
-					corner_ground_texture[idx] = texture_and_flags & 0b0000'1111;
-
-					corner_ramp[idx] = (texture_and_flags & 0b0001'0000) != 0;
-					corner_blight[idx] = (texture_and_flags & 0b0010'0000) != 0;
-					corner_water[idx] = (texture_and_flags & 0b0100'0000) != 0;
-					corner_boundary[idx] = (texture_and_flags & 0b1000'0000) != 0;
-				}
-
-				const uint8_t variation = reader.read<uint8_t>();
-				corner_ground_variation[idx] = variation & 0b0001'1111;
-				corner_cliff_variation[idx] = (variation & 0b1110'0000) >> 5;
-
-				const uint8_t misc = reader.read<uint8_t>();
-				corner_cliff_texture[idx] = (misc & 0b1111'0000) >> 4;
-				corner_layer_height[idx] = misc & 0b0000'1111;
+				corner_ramp[i] = (texture_and_flags & 0b0001'0000) != 0;
+				corner_blight[i] = (texture_and_flags & 0b0010'0000) != 0;
+				corner_water[i] = (texture_and_flags & 0b0100'0000) != 0;
+				corner_boundary[i] = (texture_and_flags & 0b1000'0000) != 0;
 			}
+
+			const uint8_t variation = reader.read<uint8_t>();
+			corner_ground_variation[i] = variation & 0b0001'1111;
+			corner_cliff_variation[i] = (variation & 0b1110'0000) >> 5;
+
+			const uint8_t misc = reader.read<uint8_t>();
+			corner_cliff_texture[i] = (misc & 0b1111'0000) >> 4;
+			corner_layer_height[i] = misc & 0b0000'1111;
 		}
 
 		create(physics);
@@ -547,7 +545,7 @@ export class Terrain: public QObject {
 		writer.write(height);
 		writer.write(offset);
 
-		for (size_t i = 0; i < corner_height.size(); i++) {
+		for (size_t i = 0; i < width * height; i++) {
 			writer.write<uint16_t>(corner_height[i] * 512.f + 8192.f);
 
 			uint16_t water_and_edge = corner_water_height[i] * 512.f + 8192.f;
@@ -953,37 +951,46 @@ export class Terrain: public QObject {
 	}
 
 	void update_ground_heights(const QRect& area) {
+		// Set base ground heights for all corners in area
 		for (int j = area.y(); j < area.y() + area.height(); j++) {
 			for (int i = area.x(); i < area.x() + area.width(); i++) {
 				const size_t idx = ci(i, j);
+				gpu_final_ground_heights[idx] = corner_height[idx] + corner_layer_height[idx] - 2.0f;
+			}
+		}
 
-				float ramp_height = 0.f;
-				// Check if in one of the configurations the bottom_left is a ramp
-				for (int x_offset = -1; x_offset <= 0; x_offset++) {
-					for (int y_offset = -1; y_offset <= 0; y_offset++) {
-						if (i + x_offset >= 0 && i + x_offset < width - 1 && j + y_offset >= 0 && j + y_offset < height - 1) {
-							const size_t bl = ci(i + x_offset, j + y_offset);
-							const size_t br = ci(i + 1 + x_offset, j + y_offset);
-							const size_t tl = ci(i + x_offset, j + 1 + y_offset);
-							const size_t tr = ci(i + 1 + x_offset, j + 1 + y_offset);
+		// For each ramp entrance tile overlapping the area, set base + 0.5 for corners at the base level.
+		// Uses assignment so corners shared by multiple ramp tiles are written idempotently.
+		const QRect tile_area = area.adjusted(-1, -1, 0, 0).intersected({0, 0, width - 1, height - 1});
+		for (int j = tile_area.y(); j < tile_area.y() + tile_area.height(); j++) {
+			for (int i = tile_area.x(); i < tile_area.x() + tile_area.width(); i++) {
+				const size_t bl = ci(i, j);
+				const size_t br = bl + 1;
+				const size_t tl = bl + width;
+				const size_t tr = bl + width + 1;
 
-							const int base = std::min(
-								{corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]}
-							);
-							if (corner_layer_height[idx] != base) {
-								continue;
-							}
-
-							if (is_corner_ramp_entrance(i + x_offset, j + y_offset)) {
-								ramp_height = 0.5f;
-								goto exit_loop;
-							}
-						}
-					}
+				if (!(corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr])) {
+					continue;
 				}
-			exit_loop:
 
-				gpu_final_ground_heights[j * width + i] = corner_final_ground_height(i, j) + ramp_height;
+				if (corner_layer_height[bl] == corner_layer_height[tr] && corner_layer_height[tl] == corner_layer_height[br]) {
+					continue;
+				}
+
+				// Multiple iterations might set the same index so needs to be idempotent
+				const int base = std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
+				if (corner_layer_height[bl] == base) {
+					gpu_final_ground_heights[bl] = corner_height[bl] + corner_layer_height[bl] - 2.0f + 0.5f;
+				}
+				if (corner_layer_height[br] == base) {
+					gpu_final_ground_heights[br] = corner_height[br] + corner_layer_height[br] - 2.0f + 0.5f;
+				}
+				if (corner_layer_height[tl] == base) {
+					gpu_final_ground_heights[tl] = corner_height[tl] + corner_layer_height[tl] - 2.0f + 0.5f;
+				}
+				if (corner_layer_height[tr] == base) {
+					gpu_final_ground_heights[tr] = corner_height[tr] + corner_layer_height[tr] - 2.0f + 0.5f;
+				}
 			}
 		}
 
