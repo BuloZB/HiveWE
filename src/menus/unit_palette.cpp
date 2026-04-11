@@ -99,7 +99,7 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 
 	connect(edit_in_oe, &QSmallRibbonButton::clicked, [&]() {
 		bool created;
-		auto editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+		const auto editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
 		const Unit* unit = *brush.selections.begin();
 		if (items_slk.row_headers.contains(unit->id)) {
 			editor->select_id(ObjectEditor::Category::item, unit->id);

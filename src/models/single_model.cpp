@@ -371,13 +371,13 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 		return create_icon_editor(parent);
 	} else if (type == "doodadCategory") {
 		QComboBox* editor = new QComboBox(parent);
-		for (auto&& [key, value] : world_edit_data.section("DoodadCategories")) {
+		for (const auto& [key, value] : world_edit_data.section("DoodadCategories")) {
 			editor->addItem(QString::fromStdString(value[0]), QString::fromStdString(key));
 		}
 		return editor;
 	} else if (type == "destructableCategory") {
 		QComboBox* editor = new QComboBox(parent);
-		for (auto&& [key, value] : world_edit_data.section("DestructibleCategories")) {
+		for (const auto& [key, value] : world_edit_data.section("DestructibleCategories")) {
 			editor->addItem(QString::fromStdString(value[0]), QString::fromStdString(key));
 		}
 		return editor;
@@ -415,7 +415,7 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 	} else if (type == "unitList") {
 		QListWidget* list = editor->findChild<QListWidget*>("unitList");
 
-		auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
+		const auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
 		for (const auto& id : ids) {
 			QListWidgetItem* item = new QListWidgetItem;
 			item->setText(units_table->data(id.toStdString(), "name").toString());
@@ -426,7 +426,7 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 	} else if (type == "upgradeList") {
 		QListWidget* list = editor->findChild<QListWidget*>("upgradeList");
 
-		auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
+		const auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
 		for (const auto& id : ids) {
 			QListWidgetItem* item = new QListWidgetItem;
 			item->setText(upgrade_table->data(id.toStdString(), "name1").toString());
@@ -437,7 +437,7 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 	} else if (type == "abilityList" || type == "heroAbilityList" || type == "abilitySkinList") {
 		QListWidget* list = editor->findChild<QListWidget*>("abilityList");
 
-		auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
+		const auto ids = index.data(Qt::EditRole).toString().split(',', Qt::SkipEmptyParts);
 		for (const auto& id : ids) {
 			QListWidgetItem* item = new QListWidgetItem;
 			item->setText(abilities_table->data(id.toStdString(), "name").toString());

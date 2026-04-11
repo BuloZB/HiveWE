@@ -75,6 +75,8 @@ class TerrainBrush: public Brush {
 	std::vector<Doodad> pre_change_doodads;
 	std::map<int, Doodad> post_change_doodads;
 
-	std::vector<std::vector<Corner>> old_corners;
+	std::vector<Corner> old_corners;
+	int old_corners_width = 0;
+	int old_corners_height = 0;
 	std::vector<uint8_t> old_pathing_cells_static;
 };

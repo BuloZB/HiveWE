@@ -82,7 +82,7 @@ void UnitBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	if (event->button() == Qt::LeftButton && input_handler.mouse.y > 0.f) {
 		if (mode == Mode::selection) {
 			if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
-				auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
 				if (id) {
 					if (selections.contains(&map->units.units[id.value()])) {
 						selections.erase(&map->units.units[id.value()]);
@@ -94,7 +94,7 @@ void UnitBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 			}
 
 			if (!event->modifiers()) {
-				auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
 				if (id) {
 					Unit& unit = map->units.units[id.value()];
 
@@ -160,7 +160,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 			} else if (selection_started) {
 				const glm::vec3 size = input_handler.mouse_world - selection_start;
 
-				auto query = map->units.query_area({selection_start.x, selection_start.y, size.x, size.y});
+				const auto query = map->units.query_area({selection_start.x, selection_start.y, size.x, size.y});
 				if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
 					selections.insert(query.begin(), query.end());
 				} else if (event->modifiers() & Qt::KeyboardModifier::AltModifier) {

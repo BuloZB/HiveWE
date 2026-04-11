@@ -3,6 +3,7 @@
 #include "StormLib.h"
 
 import std;
+import GLThreadPool;
 import Hierarchy;
 import BinaryReader;
 import MPQ;
@@ -205,7 +206,7 @@ HiveWE::HiveWE(QWidget* parent)
 
 	connect(ui.ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
-		auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
+		const auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
 		connect(this, &HiveWE::saving_initiated, editor, &TriggerEditor::save_changes, Qt::UniqueConnection);
 	});
 
@@ -235,6 +236,7 @@ HiveWE::HiveWE(QWidget* parent)
 
 	connect(minimap, &Minimap::clicked, [](QPointF location) { camera.position = { location.x() * map->terrain.width, (1.0 - location.y()) * map->terrain.height, camera.position.z }; });
 	ui.widget->makeCurrent();
+	gl_thread_pool.init(8);
 	map = new Map();
 	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
 
@@ -492,7 +494,7 @@ void HiveWE::import_heightmap() {
 
 	for (int j = 0; j < height; j++) {
 		for (int i = 0; i < width; i++) {
-			map->terrain.corners[i][j].height = (image_data[((height - 1 - j) * width + i) * channels] - 128.f) / 8.f;
+			map->terrain.corner_height[map->terrain.ci(i, j)] = (image_data[((height - 1 - j) * width + i) * channels] - 128.f) / 8.f;
 		}
 	}
 

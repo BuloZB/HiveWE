@@ -44,7 +44,7 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 
 	connect(open_in_model_editor, &QPushButton::clicked, [this] {
 		bool created = false;
-		auto model_editor = window_handler.create_or_raise<ModelEditor>(nullptr, created);
+		const auto model_editor = window_handler.create_or_raise<ModelEditor>(nullptr, created);
 
 		auto path = fs::path(finalPath->text().toStdString());
 		path.replace_extension(".mdx");

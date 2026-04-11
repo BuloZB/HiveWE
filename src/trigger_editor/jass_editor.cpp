@@ -108,18 +108,22 @@ Styling::Styling(QWidget* parent) : QsciLexerCustom(parent) {
 	setColor(QColor(184, 215, 163), JASS_CONSTANT); // constant
 	setColor(QColor(78, 201, 176), JASS_TYPE); // type
 
-	std::vector<std::string> operators = { "+", "-", "/", "*", ",", "=", ":", "(", ")", ">=", "<=", "!=", "[", "]", "<", ">", "&" };
+	const std::vector<std::string> operators = {"+", "-", "/", "*", ",", "=", ":", "(", ")", ">=", "<=", "!=", "[", "]", "<", ">", "&"};
 
 	// TODO@Daniel:
 	// Types should be in their own list
-	keywords_ = { "class", "return", "if", "else", "while", "for", "in", "break", "new", "null", "package", "endpackage",
-		"function", "returns", "public", "private", "protected", "import", "initlater", "native", "nativetype", "extends", "interface",
-		"implements", "module", "use", "abstract", "static", "thistype", "override", "immutable", "it", "array", "and", "or", "not",
-		"this", "construct", "ondestroy", "destroy", "type", "constant", "endfunction", "nothing", "init", "castTo", "tuple", "div",
-		"mod", "let", "from", "to", "downto", "step", "endpackage", "skip", "true", "false", "var", "instanceof", "super", "enum",
-		"switch", "case", "default", "typeId", "begin", "end", "compiletime", "library", "endlibrary", "scope", "endscope", "requires",
-		"uses", "needs", "struct", "endstruct", "then", "endif", "loop", "exitwhen", "endloop", "method", "takes", "endmethod", "set",
-		"call", "globals", "endglobals", "initializer", "elseif", "vararg", "local" };
+	keywords_ = {"class",	  "return",		"if",		   "else",		 "while",		"for",		 "in",		   "break",
+				 "new",		  "null",		"package",	   "endpackage", "function",	"returns",	 "public",	   "private",
+				 "protected", "import",		"initlater",   "native",	 "nativetype",	"extends",	 "interface",  "implements",
+				 "module",	  "use",		"abstract",	   "static",	 "thistype",	"override",	 "immutable",  "it",
+				 "array",	  "and",		"or",		   "not",		 "this",		"construct", "ondestroy",  "destroy",
+				 "type",	  "constant",	"endfunction", "nothing",	 "init",		"castTo",	 "tuple",	   "div",
+				 "mod",		  "let",		"from",		   "to",		 "downto",		"step",		 "endpackage", "skip",
+				 "true",	  "false",		"var",		   "instanceof", "super",		"enum",		 "switch",	   "case",
+				 "default",	  "typeId",		"begin",	   "end",		 "compiletime", "library",	 "endlibrary", "scope",
+				 "endscope",  "requires",	"uses",		   "needs",		 "struct",		"endstruct", "then",	   "endif",
+				 "loop",	  "exitwhen",	"endloop",	   "method",	 "takes",		"endmethod", "set",		   "call",
+				 "globals",	  "endglobals", "initializer", "elseif",	 "vararg",		"local"};
 }
 
 const char* Styling::language() const {
@@ -158,7 +162,7 @@ void Styling::styleText(int start, int end) {
 	startStyling(start);
 
 	// TODO@Daniel:
-	// Eat up unfinished string/rawcode/comment block 
+	// Eat up unfinished string/rawcode/comment block
 
 	int starting_style = styleAt(start - 1);
 
@@ -248,14 +252,14 @@ JassEditor::JassEditor(QWidget* parent) : QsciScintilla(parent), lexer(this), ap
 
 	// NOTE@Daniel:
 	// I hadn't noticed that this wasn't a QString before I finished JassTokenizer
-	std::vector<uint8_t, default_init_allocator<uint8_t>> common_data = hierarchy.open_file("Scripts/common.j").value().buffer;
-	QString common_script(QByteArray((char const*)common_data.data(), (int)common_data.size()));
+	const std::vector<uint8_t, default_init_allocator<uint8_t>> common_data = hierarchy.open_file("Scripts/common.j").value().buffer;
+	QString common_script(QByteArray(reinterpret_cast<char const*>(common_data.data()), static_cast<int>(common_data.size())));
 
-	std::vector<uint8_t, default_init_allocator<uint8_t>> blizzard_data = hierarchy.open_file("Scripts/blizzard.j").value().buffer;
-	QString blizzard_script(QByteArray((char const*)blizzard_data.data(), (int)blizzard_data.size()));
+	const std::vector<uint8_t, default_init_allocator<uint8_t>> blizzard_data = hierarchy.open_file("Scripts/blizzard.j").value().buffer;
+	QString blizzard_script(QByteArray(reinterpret_cast<char const*>(blizzard_data.data()), static_cast<int>(blizzard_data.size())));
 
-	std::vector<uint8_t, default_init_allocator<uint8_t>> cheat_data = hierarchy.open_file("Scripts/cheats.j").value().buffer;
-	QString cheat_script(QByteArray((char const*)cheat_data.data(), (int)cheat_data.size()));
+	const std::vector<uint8_t, default_init_allocator<uint8_t>> cheat_data = hierarchy.open_file("Scripts/cheats.j").value().buffer;
+	QString cheat_script(QByteArray(reinterpret_cast<char const*>(cheat_data.data()), static_cast<int>(cheat_data.size())));
 
 	// TODO@Daniel:
 	// This should be in it's own class
