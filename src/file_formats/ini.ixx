@@ -54,6 +54,7 @@ namespace ini {
 
 				if (view.front() == '[') {
 					current_section = view.substr(1, view.find(']') - 1);
+					ini_data.emplace(current_section, hive::unordered_map<std::string, std::vector<std::string>>{});
 				} else {
 					const size_t found = view.find_first_of('=');
 					if (found == std::string_view::npos) {
@@ -91,7 +92,7 @@ namespace ini {
 							found->second[key] = std::move(parts);
 						}
 					} else {
-						ini_data[current_section][key] = std::move(parts);
+						ini_data.at(current_section).emplace(key, std::move(parts));
 					}
 				}
 				view.remove_prefix(eol + 1);

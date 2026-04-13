@@ -33,7 +33,7 @@ using namespace std::literals::string_literals;
 
 export struct Corner {
 	bool map_edge = false;
-	int ground_texture = 0;
+	uint8_t ground_texture = 0;
 	float height = 0.f;
 	float water_height = 0.f;
 	bool ramp = false;
@@ -145,7 +145,7 @@ export class Terrain: public QObject {
 	// SoA corner data — indexed as ci(x, y) = y * width + x
 	std::vector<float> corner_height;
 	std::vector<float> corner_water_height;
-	std::vector<int> corner_ground_texture;
+	std::vector<uint8_t> corner_ground_texture;
 	std::vector<int> corner_ground_variation;
 	std::vector<int> corner_cliff_variation;
 	std::vector<int> corner_cliff_texture;
@@ -723,47 +723,41 @@ export class Terrain: public QObject {
 		update_ground_textures({0, 0, width, height});
 	}
 
-	/// The texture of the tilepoint which is influenced by its surroundings. nearby cliff/ramp > blight > regular texture
+	/// The texture of the tile point which is influenced by its surroundings.
+	/// Nearby cliff/ramp > blight > regular texture
 	[[nodiscard]]
-	int real_tile_texture(const int x, const int y) const {
-		for (int i = -1; i < 1; i++) {
-			for (int j = -1; j < 1; j++) {
-				if (x + i >= 0 && x + i < width && y + j >= 0 && y + j < height) {
-					const size_t idx = ci(x + i, y + j);
-					if (corner_cliff[idx]) {
-						if (x + i < width - 1 && y + j < height - 1) {
-							const size_t bl = idx;
-							const size_t br = ci(x + i + 1, y + j);
-							const size_t tl = ci(x + i, y + j + 1);
-							const size_t tr = ci(x + i + 1, y + j + 1);
-
-							if (corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr] && !corner_romp[bl]
-								&& !corner_romp[br] && !corner_romp[tl] && !corner_romp[tr]) {
-								goto out_of_loop;
-							}
-						}
-					}
-
-					if (corner_romp[idx] || corner_cliff[idx]) {
-						int texture = corner_cliff_texture[idx];
-						// Number 15 seems to be something
-						if (texture == 15) {
-							texture -= 14;
-						}
-
-						return cliff_to_ground_texture[texture];
-					}
-				}
-			}
-		}
-	out_of_loop:
-
+	uint8_t Terrain::real_tile_texture(const int x, const int y) const {
+		// We only need to check ourselves, to the left, bottom-left and bottom
 		const size_t idx = ci(x, y);
+		uint8_t a_romp = corner_romp[idx];
+		uint8_t a_cliff = corner_cliff[idx];
+		if (x > 0) {
+			a_romp |= corner_romp[idx - 1];
+			a_cliff |= corner_cliff[idx - 1];
+		}
+		if (y > 0) {
+			a_romp |= corner_romp[idx - width];
+			a_cliff |= corner_cliff[idx - width];
+		}
+		if (x > 0 && y > 0) {
+			a_romp |= corner_romp[idx - width - 1];
+			a_cliff |= corner_cliff[idx - width - 1];
+		}
+
+		if (a_romp || (a_cliff && !corner_ramp[idx])) {
+			int texture = corner_cliff_texture[idx];
+			// Number 15 seems to be something
+			if (texture == 15) {
+				texture -= 14;
+			}
+			return cliff_to_ground_texture[texture];
+		}
+
 		if (corner_blight[idx]) {
 			return blight_texture;
+		} else {
+			return corner_ground_texture[idx];
 		}
-
-		return corner_ground_texture[idx];
 	}
 
 	/// The subtexture of a groundtexture to use.
@@ -783,32 +777,6 @@ export class Terrain: public QObject {
 				return 15;
 			}
 		}
-	}
-
-	/// The 4 ground textures of the tilepoint. The first 16 bits are which texture array to use and the next 16 bits are which subtexture to use
-	glm::uvec4 get_texture_variations(const int x, const int y) const {
-		const int bottom_left = real_tile_texture(x, y);
-		const int bottom_right = real_tile_texture(x + 1, y);
-		const int top_left = real_tile_texture(x, y + 1);
-		const int top_right = real_tile_texture(x + 1, y + 1);
-
-		std::set<int> set({bottom_left, bottom_right, top_left, top_right});
-		glm::uvec4 tiles(0xFFFF); // 0xFFFF is a transparent black pixel in the fragment shader
-		int component = 1;
-
-		tiles.x = *set.begin() + (get_tile_variation(*set.begin(), corner_ground_variation[ci(x, y)]) << 16);
-		set.erase(set.begin());
-
-		std::bitset<4> index;
-		for (auto&& texture : set) {
-			index[0] = bottom_right == texture;
-			index[1] = bottom_left == texture;
-			index[2] = top_right == texture;
-			index[3] = top_left == texture;
-
-			tiles[component++] = texture + (index.to_ulong() << 16);
-		}
-		return tiles;
 	}
 
 	/// Returns the height at x,y by bilinear interpolation
@@ -999,12 +967,49 @@ export class Terrain: public QObject {
 	}
 
 	/// Updates the ground texture variation information and uploads it to the GPU
-	void update_ground_textures(const QRect& area) {
-		const QRect update_area = area.adjusted(-1, -1, 1, 1).intersected({0, 0, width - 1, height - 1});
+	/// Make sure update_cliff_meshes() is up to date on the target area
+	void Terrain::update_ground_textures(const QRect& area) {
+		const QRect update_area = area.adjusted(-2, -2, 2, 2).intersected({0, 0, width, height});
 
-		for (int j = update_area.top(); j <= update_area.bottom(); j++) {
-			for (int i = update_area.left(); i <= update_area.right(); i++) {
-				gpu_ground_texture_list[j * (width - 1) + i] = get_texture_variations(i, j);
+		const int x0 = update_area.x();
+		const int y0 = update_area.y();
+		const int scratch_width = update_area.width();
+		const int scratch_height = update_area.height();
+
+		std::vector<uint8_t> scratch(scratch_width * scratch_height);
+		for (int j = 0; j < scratch_height; ++j) {
+			for (int i = 0; i < scratch_width; ++i) {
+				scratch[j * scratch_width + i] = real_tile_texture(x0 + i, y0 + j);
+			}
+		}
+
+		for (int j = 0; j < scratch_height - 1; ++j) {
+			for (int i = 0; i < scratch_width - 1; ++i) {
+				const uint8_t bottom_left = scratch[j * scratch_width + i];
+				const uint8_t bottom_right = scratch[j * scratch_width + (i + 1)];
+				const uint8_t top_left = scratch[(j + 1) * scratch_width + i];
+				const uint8_t top_right = scratch[(j + 1) * scratch_width + (i + 1)];
+
+				uint16_t u[4] = {bottom_left, bottom_right, top_right, top_left};
+				std::sort(u, u + 4);
+				uint16_t* last = std::unique(u, u + 4);
+
+				const int tx = x0 + i;
+				const int ty = y0 + j;
+
+				glm::uvec4 out(0xFFFFu);
+				out.x = u[0] | get_tile_variation(u[0], corner_ground_variation[ci(tx, ty)]) << 16;
+
+				for (int k = 1; k < std::distance(u, last); ++k) {
+					uint32_t mask = 0;
+					mask |= static_cast<uint32_t>(bottom_right == u[k]);
+					mask |= static_cast<uint32_t>(bottom_left == u[k]) << 1;
+					mask |= static_cast<uint32_t>(top_right == u[k]) << 2;
+					mask |= static_cast<uint32_t>(top_left == u[k]) << 3;
+					out[k] = u[k] | mask << 16;
+				}
+
+				gpu_ground_texture_list[ty * (width - 1) + tx] = out;
 			}
 		}
 
@@ -1269,7 +1274,7 @@ export class Terrain: public QObject {
 		// Allocate new SoA arrays with defaults
 		std::vector<float> new_height_arr(new_total, 0.f);
 		std::vector<float> new_water_height(new_total, 0.f);
-		std::vector<int> new_ground_texture(new_total, 0);
+		std::vector<uint8_t> new_ground_texture(new_total, 0);
 		std::vector<int> new_ground_variation(new_total, 0);
 		std::vector<int> new_cliff_variation(new_total, 0);
 		std::vector<int> new_cliff_texture(new_total, 15);
@@ -1374,7 +1379,7 @@ export class Terrain: public QObject {
 
 		// update everything else
 		update_ground_heights({0, 0, width, height});
-		update_ground_textures({0, 0, width - 1, height - 1});
+		update_ground_textures({0, 0, width, height});
 		update_cliff_meshes({0, 0, width - 1, height - 1});
 		update_water({0, 0, width, height});
 

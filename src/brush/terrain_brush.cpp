@@ -205,18 +205,19 @@ void TerrainBrush::apply(double frame_delta) {
 					continue;
 				}
 
-				bool cliff_near = false;
-				for (int k = -1; k < 1; k++) {
-					for (int l = -1; l < 1; l++) {
-						if (i + k >= 0 && i + k <= width && j + l >= 0 && j + l <= height) {
+				const size_t idx = terrain.ci(i, j);
+				if (id == terrain.blight_texture) {
+					bool cliff_near = false;
+
+					const int left = i > 0 ? -1 : 0;
+					const int bottom = j > 0 ? -1 : 0;
+					for (int k = left; k <= 0; k++) {
+						for (int l = bottom; l <= 0; l++) {
 							cliff_near = cliff_near || terrain.corner_cliff[terrain.ci(i + k, j + l)];
 						}
 					}
-				}
 
-				const size_t idx = terrain.ci(i, j);
-				if (id == terrain.blight_texture) {
-					// Blight shouldn't be set when there is a cliff near
+					// Blight shouldn't be set when there is a cliff near, following vanilla WE behavior.
 					if (cliff_near) {
 						continue;
 					}
