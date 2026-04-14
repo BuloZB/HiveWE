@@ -177,7 +177,7 @@ void TerrainBrush::apply_begin() {
 			case cliff_operation::level:
 				break;
 		}
-		layer_height = std::clamp(layer_height, 0, 15);
+		layer_height = std::clamp(layer_height, Terrain::min_layer_height, Terrain::max_layer_height);
 	}
 }
 
@@ -289,7 +289,7 @@ void TerrainBrush::apply(double frame_delta) {
 					}
 				}
 
-				terrain.corner_height[idx] = std::clamp(new_height, -16.f, 15.98f); // ToDo why 15.98?
+				terrain.corner_height[idx] = std::clamp(new_height, Terrain::min_ground_height, Terrain::max_ground_height);
 			}
 		}
 

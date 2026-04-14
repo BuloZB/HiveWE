@@ -43,10 +43,10 @@ export struct Corner {
 	bool cliff = false;
 	bool romp = false;
 	bool special_doodad = false;
-	int ground_variation = 0;
-	int cliff_variation = 0;
-	int cliff_texture = 15;
-	int layer_height = 2;
+	uint8_t ground_variation = 0;
+	uint8_t cliff_variation = 0;
+	uint8_t cliff_texture = 15;
+	uint8_t layer_height = 2;
 };
 
 // total sum 570
@@ -98,7 +98,7 @@ export struct TilePathingg {
 	}
 };
 
-export class Terrain: public QObject {
+export class Terrain: public QObject{
 	Q_OBJECT
 
 	static constexpr int write_version = 12;
@@ -128,6 +128,13 @@ export class Terrain: public QObject {
 	GLuint water_exists_buffer;
 
   public:
+
+	static constexpr float min_ground_height = -16.f;
+	static constexpr float max_ground_height = 15.98f;  // ToDo why 15.98?
+
+	static constexpr int min_layer_height = 0;
+	static constexpr int max_layer_height = 15;
+
 	char tileset;
 	std::vector<std::string> tileset_ids;
 	std::vector<std::string> cliffset_ids;
@@ -146,10 +153,10 @@ export class Terrain: public QObject {
 	std::vector<float> corner_height;
 	std::vector<float> corner_water_height;
 	std::vector<uint8_t> corner_ground_texture;
-	std::vector<int> corner_ground_variation;
-	std::vector<int> corner_cliff_variation;
-	std::vector<int> corner_cliff_texture;
-	std::vector<int> corner_layer_height;
+	std::vector<uint8_t> corner_ground_variation;
+	std::vector<uint8_t> corner_cliff_variation;
+	std::vector<uint8_t> corner_cliff_texture;
+	std::vector<uint8_t> corner_layer_height;
 	std::vector<uint8_t> corner_map_edge;
 	std::vector<uint8_t> corner_ramp;
 	std::vector<uint8_t> corner_blight;
@@ -726,7 +733,7 @@ export class Terrain: public QObject {
 	/// The texture of the tile point which is influenced by its surroundings.
 	/// Nearby cliff/ramp > blight > regular texture
 	[[nodiscard]]
-	uint8_t Terrain::real_tile_texture(const int x, const int y) const {
+	uint8_t real_tile_texture(const int x, const int y) const {
 		// We only need to check ourselves, to the left, bottom-left and bottom
 		const size_t idx = ci(x, y);
 		uint8_t a_romp = corner_romp[idx];
@@ -946,7 +953,8 @@ export class Terrain: public QObject {
 				}
 
 				// Multiple iterations might set the same index so needs to be idempotent
-				const int base = std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
+				const int base =
+					std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
 				if (corner_layer_height[bl] == base) {
 					gpu_final_ground_heights[bl] = corner_height[bl] + corner_layer_height[bl] - 2.0f + 0.5f;
 				}
@@ -968,7 +976,7 @@ export class Terrain: public QObject {
 
 	/// Updates the ground texture variation information and uploads it to the GPU
 	/// Make sure update_cliff_meshes() is up to date on the target area
-	void Terrain::update_ground_textures(const QRect& area) {
+	void update_ground_textures(const QRect& area) {
 		const QRect update_area = area.adjusted(-2, -2, 2, 2).intersected({0, 0, width, height});
 
 		const int x0 = update_area.x();
@@ -1091,8 +1099,8 @@ export class Terrain: public QObject {
 				const size_t tl = ci(i, j + 1);
 				const size_t tr = ci(i + 1, j + 1);
 
-				// Vertical ramps: 2-wide × 3-tall strip
-				if (j < height - 2) {
+				// Vertical ramps: 2-wide x 3-tall strip
+				if (corner_ramp[bl] != corner_ramp[br] && j < height - 2) {
 					const size_t ttl = ci(i, j + 2);
 					const size_t ttr = ci(i + 1, j + 2);
 
@@ -1275,10 +1283,10 @@ export class Terrain: public QObject {
 		std::vector<float> new_height_arr(new_total, 0.f);
 		std::vector<float> new_water_height(new_total, 0.f);
 		std::vector<uint8_t> new_ground_texture(new_total, 0);
-		std::vector<int> new_ground_variation(new_total, 0);
-		std::vector<int> new_cliff_variation(new_total, 0);
-		std::vector<int> new_cliff_texture(new_total, 15);
-		std::vector<int> new_layer_height(new_total, 2);
+		std::vector<uint8_t> new_ground_variation(new_total, 0);
+		std::vector<uint8_t> new_cliff_variation(new_total, 0);
+		std::vector<uint8_t> new_cliff_texture(new_total, 15);
+		std::vector<uint8_t> new_layer_height(new_total, 2);
 		std::vector<uint8_t> new_map_edge(new_total, 0);
 		std::vector<uint8_t> new_ramp(new_total, 0);
 		std::vector<uint8_t> new_blight(new_total, 0);
