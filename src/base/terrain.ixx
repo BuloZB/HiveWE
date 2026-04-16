@@ -530,9 +530,9 @@ export class Terrain: public QObject{
 
 		setup_collision_shape(physics);
 
-		update_ground_textures({0, 0, width - 1, height - 1});
 		update_ground_heights({0, 0, width - 1, height - 1});
 		update_cliff_meshes({0, 0, width - 1, height - 1});
+		update_ground_textures({0, 0, width, height});
 		update_water({0, 0, width - 1, height - 1});
 
 		emit minimap_changed(minimap_image());
