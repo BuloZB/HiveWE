@@ -163,7 +163,41 @@ export class Doodads {
 	}
 
 	void create(Terrain& terrain, PathingMap& pathing_map) {
-		// Load doodads multithreaded
+		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
+		// Without this, multiple threads block on shared_future::get() inside ResourceManager
+		// while only 1 thread actually constructs the shared mesh.
+		{
+			std::unordered_set<std::string> seen;
+			std::vector<std::future<void>> mesh_futures;
+
+			for (const auto& i : doodads) {
+				std::string key = i.id + std::to_string(i.variation);
+				if (seen.insert(key).second) {
+					std::string id = i.id;
+					int variation = i.variation;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id, variation] {
+						get_mesh(id, variation);
+					}));
+				}
+			}
+			for (const auto& i : special_doodads) {
+				std::string key = i.id + std::to_string(i.variation);
+				if (seen.insert(key).second) {
+					std::string id = i.id;
+					int variation = i.variation;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id, variation] {
+						get_mesh(id, variation);
+					}));
+				}
+			}
+
+			for (auto& f : mesh_futures) {
+				f.get();
+			}
+		}
+
+		// Phase 2: Init doodads. All meshes are now cached in id_to_mesh,
+		// so get_mesh() returns immediately without blocking in ResourceManager.
 		std::vector<std::future<void>> futures;
 		futures.reserve(doodads.size() + special_doodads.size());
 

@@ -305,7 +305,40 @@ export class Units {
 	}
 
 	void create() {
-		// Load units multithreaded
+		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
+		// Without this, multiple threads block on shared_future::get() inside ResourceManager
+		// while only 1 thread actually constructs the shared mesh.
+		{
+			std::unordered_set<std::string> seen;
+			std::vector<std::future<void>> mesh_futures;
+
+			for (const auto& i : units) {
+				if (i.id == "sloc") {
+					continue;
+				}
+				if (seen.insert(i.id).second) {
+					std::string id = i.id;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id] {
+						get_mesh(id);
+					}));
+				}
+			}
+			for (const auto& i : items) {
+				if (seen.insert(i.id).second) {
+					std::string id = i.id;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id] {
+						get_mesh(id);
+					}));
+				}
+			}
+
+			for (auto& f : mesh_futures) {
+				f.get();
+			}
+		}
+
+		// Phase 2: Init units. All meshes are now cached in id_to_mesh,
+		// so get_mesh() returns immediately without blocking in ResourceManager.
 		std::vector<std::future<void>> futures;
 		futures.reserve(units.size() + items.size());
 
