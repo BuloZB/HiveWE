@@ -492,9 +492,11 @@ export class Doodads {
 		mesh_path.replace_filename(stem + (variations == "1" ? "" : std::to_string(variation)));
 		mesh_path.replace_extension(".mdx");
 
-		// Use base model when variation doesn't exist
-		if (!hierarchy.file_exists(mesh_path)) {
-			mesh_path.remove_filename() /= stem + ".mdx";
+		if (doodads_slk.row_headers.contains(id)) {
+			// Use base model when variation doesn't exist, only for doodads (WE/game behaviour)
+			if (!hierarchy.file_exists(mesh_path)) {
+				mesh_path.remove_filename() /= stem + ".mdx";
+			}
 		}
 
 		mesh_path = fs::path(string_replaced(mesh_path.string(), "\\", "/"));
