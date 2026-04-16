@@ -441,16 +441,13 @@ export class Units {
 
 		mesh_path = fs::path(string_replaced(mesh_path.string(), "\\", "/"));
 
-		// Mesh doesn't exist at all
-		if (!hierarchy.file_exists(mesh_path)) {
-			std::println("Missing model file for {} With file path: {}", id, mesh_path.string());
-			auto mesh = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
-			std::lock_guard lock(mesh_mutex);
-			id_to_mesh.emplace(id, mesh);
-			return mesh;
+		auto result = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+		if (!result) {
+			std::println("Missing model file for {} with file path: {} ({})", id, mesh_path.string(), result.error());
+			result = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
 		}
 
-		auto mesh = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+		auto mesh = result.value();
 		{
 			std::lock_guard lock(mesh_mutex);
 			id_to_mesh.emplace(id, mesh);

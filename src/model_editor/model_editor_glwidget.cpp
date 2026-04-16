@@ -52,7 +52,7 @@ void ModelEditorGLWidget::initializeGL() {
 	skeleton = SkeletalModelInstance(mdx);
 	recenter_camera();
 
-	shader = resource_manager.load<Shader>({ "data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag" });
+	shader = resource_manager.load<Shader>({ "data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag" }).value();
 }
 
 void ModelEditorGLWidget::resizeGL(const int w, const int h) {

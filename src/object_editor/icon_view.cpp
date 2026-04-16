@@ -12,6 +12,7 @@
 import std;
 import Hierarchy;
 import Globals;
+import ResourceManager;
 
 namespace fs = std::filesystem;
 
@@ -195,7 +196,7 @@ QVariant IconModel::data(const QModelIndex& index, int role) const {
 			if (icon_cache.contains(string_path)) {
 				return icon_cache.at(string_path)->icon;
 			} else {
-				icon_cache.emplace(string_path, resource_manager.load<QIconResource>(string_path));
+				icon_cache.emplace(string_path, resource_manager.load<QIconResource>(string_path).value());
 				return icon_cache.at(string_path)->icon;
 			}
 		}

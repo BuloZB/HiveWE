@@ -217,16 +217,16 @@ export class EditableMesh: public Resource {
 
 				if (replaceable_id_override && texture.replaceable_id == replaceable_id_override->first) {
 					textures.push_back(
-						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags))
+						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags)).value()
 					);
 				} else {
 					textures.push_back(resource_manager.load<GPUTexture>(
 						mdx::replaceable_id_to_texture.at(texture.replaceable_id) + suffix,
 						std::to_string(texture.flags)
-					));
+					).value());
 				}
 			} else {
-				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags)));
+				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags)).value());
 			}
 			glTextureParameteri(textures.back()->id, GL_TEXTURE_WRAP_S, texture.flags & 1 ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 			glTextureParameteri(textures.back()->id, GL_TEXTURE_WRAP_T, texture.flags & 2 ? GL_REPEAT : GL_CLAMP_TO_EDGE);

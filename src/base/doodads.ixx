@@ -213,8 +213,13 @@ export class Doodads {
 		const slk::SLK& slk = is_doodad ? doodads_slk : destructibles_slk;
 		const std::string_view pathing_texture_path = slk.data<std::string_view>("pathtex", id);
 
-		if (hierarchy.file_exists(pathing_texture_path)) {
-			doodad.pathing = resource_manager.load<PathingTexture>(pathing_texture_path);
+		// TODO: call Doodad::init() instead?
+		if (!pathing_texture_path.empty()) {
+			if (auto result = resource_manager.load<PathingTexture>(pathing_texture_path)) {
+				doodad.pathing = *result;
+			} else {
+				std::println("Error loading pathing texture for doodad with ID: {} ({})", id, result.error());
+			}
 		}
 
 		doodad.update(terrain);
@@ -367,11 +372,10 @@ export class Doodads {
 		if (field == "pathtex") {
 			const std::string_view pathing_texture_path = doodads_slk.data<std::string_view>("pathtex", id);
 
-			if (hierarchy.file_exists(pathing_texture_path)) {
-				const auto new_pathing_texture = resource_manager.load<PathingTexture>(pathing_texture_path);
+			if (auto result = resource_manager.load<PathingTexture>(pathing_texture_path)) {
 				for (auto& i : doodads) {
 					if (i.id == id) {
-						i.pathing = new_pathing_texture;
+						i.pathing = *result;
 					}
 				}
 			} else {
@@ -411,11 +415,10 @@ export class Doodads {
 		if (field == "pathtex") {
 			const std::string_view pathing_texture_path = destructibles_slk.data<std::string_view>("pathtex", id);
 
-			if (hierarchy.file_exists(pathing_texture_path)) {
-				const auto new_pathing_texture = resource_manager.load<PathingTexture>(pathing_texture_path);
+			if (auto result = resource_manager.load<PathingTexture>(pathing_texture_path)) {
 				for (auto& i : doodads) {
 					if (i.id == id) {
-						i.pathing = new_pathing_texture;
+						i.pathing = *result;
 					}
 				}
 			} else {
@@ -462,26 +465,23 @@ export class Doodads {
 
 		mesh_path = fs::path(string_replaced(mesh_path.string(), "\\", "/"));
 
-		// Mesh doesn't exist at all
-		if (!hierarchy.file_exists(mesh_path)) {
-			std::println("Invalid model file for {} with file path: {}", id, mesh_path.string());
-			auto mesh = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
-			std::lock_guard lock(mesh_mutex);
-			id_to_mesh.emplace(full_id, mesh);
-			return mesh;
-		}
-
-		std::shared_ptr<SkinnedMesh> mesh;
+		std::expected<std::shared_ptr<SkinnedMesh>, std::string> result;
 		if (is_number(replaceable_id) && texture_name != "_") {
-			mesh = resource_manager.load<SkinnedMesh>(
+			result = resource_manager.load<SkinnedMesh>(
 				mesh_path,
 				texture_name.string(),
 				std::make_optional(std::make_pair(std::stoi(replaceable_id), texture_name.replace_extension("").string()))
 			);
 		} else {
-			mesh = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+			result = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
 		}
 
+		if (!result) {
+			std::println("Invalid model file for {} with file path: {} ({})", id, mesh_path.string(), result.error());
+			result = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
+		}
+
+		auto mesh = result.value();
 		{
 			std::lock_guard lock(mesh_mutex);
 			id_to_mesh.emplace(full_id, mesh);

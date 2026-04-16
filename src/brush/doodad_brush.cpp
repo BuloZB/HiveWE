@@ -26,7 +26,7 @@ DoodadBrush::DoodadBrush() : Brush() {
 	size_granularity = 2;
 	center_on_tile_corner = false;
 
-	click_helper = resource_manager.load<SkinnedMesh>("Objects/InvalidObject/InvalidObject.mdx", "", std::nullopt);
+	click_helper = resource_manager.load<SkinnedMesh>("Objects/InvalidObject/InvalidObject.mdx", "", std::nullopt).value();
 	click_helper_skeleton = SkeletalModelInstance(click_helper->mdx);
 }
 

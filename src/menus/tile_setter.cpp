@@ -39,7 +39,7 @@ TileSetter::TileSetter(QWidget *parent) : QDialog(parent) {
 
 	slk::SLK& slk = map->terrain.terrain_slk;
 	for (const auto&i : map->terrain.tileset_ids) {
-		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i));
+		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i)).value();
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
 		// QListWidgetItem* item = new QListWidgetItem;
@@ -124,7 +124,7 @@ void TileSetter::update_available_tiles() const {
 			continue;
 		}
 
-		const auto image = resource_manager.load<Texture>(slk.data("dir", key) + "\\" + slk.data("file", key));
+		const auto image = resource_manager.load<Texture>(slk.data("dir", key) + "\\" + slk.data("file", key)).value();
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
 		QPushButton* button = new QPushButton;

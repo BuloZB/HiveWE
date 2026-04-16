@@ -418,7 +418,7 @@ export class Terrain: public QObject{
 			for (int j = 0; j < cliffs_variation_slk.data<int>("variations", i) + 1; j++) {
 				std::string file_name =
 					"Doodads/Terrain/Cliffs/Cliffs" + cliffs_variation_slk.index_to_row.at(i) + std::to_string(j) + ".mdx";
-				cliff_meshes.push_back(resource_manager.load<CliffMesh>(file_name));
+				cliff_meshes.push_back(resource_manager.load<CliffMesh>(file_name).value());
 				path_to_cliff.emplace(
 					cliffs_variation_slk.index_to_row.at(i) + std::to_string(j),
 					static_cast<int>(cliff_meshes.size()) - 1
@@ -430,20 +430,20 @@ export class Terrain: public QObject{
 		// Ground textures
 		for (const auto& tile_id : tileset_ids) {
 			ground_textures.push_back(
-				resource_manager.load<GroundTexture>(terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id))
+				resource_manager.load<GroundTexture>(terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id)).value()
 			);
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
 			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
 		blight_texture = static_cast<int>(ground_textures.size());
 		ground_texture_to_id.emplace("blight", blight_texture);
-		ground_textures.push_back(resource_manager.load<GroundTexture>(world_edit_data.data("TileSets", std::string(1, tileset), 1)));
+		ground_textures.push_back(resource_manager.load<GroundTexture>(world_edit_data.data("TileSets", std::string(1, tileset), 1)).value());
 		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		// Cliff Textures
 		for (const auto& cliff_id : cliffset_ids) {
 			cliff_textures.push_back(
-				resource_manager.load<Texture>(cliff_slk.data("texdir", cliff_id) + "/" + cliff_slk.data("texfile", cliff_id))
+				resource_manager.load<Texture>(cliff_slk.data("texdir", cliff_id) + "/" + cliff_slk.data("texfile", cliff_id)).value()
 			);
 			cliff_texture_size = std::max(cliff_texture_size, cliff_textures.back()->width);
 			cliff_to_ground_texture.push_back(ground_texture_to_id[cliff_slk.data<std::string_view>("groundtile", cliff_id)]);
@@ -502,7 +502,7 @@ export class Terrain: public QObject{
 			// Hack to force loading of SD water textures till I implement a water shader
 			const auto hd = hierarchy.hd;
 			hierarchy.hd = false;
-			const auto texture = resource_manager.load<Texture>(std::format("{}{:02}", file_name, i));
+			const auto texture = resource_manager.load<Texture>(std::format("{}{:02}", file_name, i)).value();
 			hierarchy.hd = hd;
 
 			if (texture->width != 128 || texture->height != 128) {
@@ -524,9 +524,9 @@ export class Terrain: public QObject{
 		}
 		glGenerateTextureMipmap(water_texture_array);
 
-		ground_shader = resource_manager.load<Shader>({"data/shaders/terrain.vert", "data/shaders/terrain.frag"});
-		cliff_shader = resource_manager.load<Shader>({"data/shaders/cliff.vert", "data/shaders/cliff.frag"});
-		water_shader = resource_manager.load<Shader>({"data/shaders/water.vert", "data/shaders/water.frag"});
+		ground_shader = resource_manager.load<Shader>({"data/shaders/terrain.vert", "data/shaders/terrain.frag"}).value();
+		cliff_shader = resource_manager.load<Shader>({"data/shaders/cliff.vert", "data/shaders/cliff.frag"}).value();
+		water_shader = resource_manager.load<Shader>({"data/shaders/water.vert", "data/shaders/water.frag"}).value();
 
 		setup_collision_shape(physics);
 
@@ -704,7 +704,7 @@ export class Terrain: public QObject{
 		for (const auto& tile_id : tileset_ids) {
 			ground_textures.push_back(resource_manager.load<GroundTexture>(
 				terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
-			));
+			).value());
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
 			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
@@ -712,7 +712,7 @@ export class Terrain: public QObject{
 		ground_texture_to_id.emplace("blight", blight_texture);
 		ground_textures.push_back(resource_manager.load<GroundTexture>(
 			world_edit_data.data("TileSets", std::string(1, tileset), 1) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
-		));
+		).value());
 		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		glNamedBufferStorage(

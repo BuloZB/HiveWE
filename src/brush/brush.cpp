@@ -12,9 +12,9 @@ import <glm/gtc/matrix_transform.hpp>;
 Brush::Brush() {
 	set_size(size);
 
-	selection_shader = resource_manager.load<Shader>({"data/shaders/selection.vert", "data/shaders/selection.frag"});
-	selection_circle_shader = resource_manager.load<Shader>({"data/shaders/selection_circle.vert", "data/shaders/selection_circle.frag"});
-	brush_shader = resource_manager.load<Shader>({"data/shaders/brush.vert", "data/shaders/brush.frag"});
+	selection_shader = resource_manager.load<Shader>({"data/shaders/selection.vert", "data/shaders/selection.frag"}).value();
+	selection_circle_shader = resource_manager.load<Shader>({"data/shaders/selection_circle.vert", "data/shaders/selection_circle.frag"}).value();
+	brush_shader = resource_manager.load<Shader>({"data/shaders/brush.vert", "data/shaders/brush.frag"}).value();
 }
 
 glm::vec2 Brush::get_position() const {
