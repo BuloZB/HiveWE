@@ -104,13 +104,6 @@ export class Map: public QObject {
 		// Maybe just ignore RoC so we only need to choose between _balance/custom_v1.w3mod/Units and /Units
 		// Maybe just force everyone to suck it up and use /Units
 
-		// Units
-		units_slk = slk::SLK("Units/UnitData.slk");
-		// By making some changes to unitmetadata.slk and unitdata.slk we can avoid the 1->2->2 mapping for SLK->OE->W3U files. We have to add some columns for this though
-		units_slk.add_column("missilearc2");
-		units_slk.add_column("missileart2");
-		units_slk.add_column("missilespeed2");
-		units_slk.add_column("buttonpos2");
 		auto units_future = std::async(std::launch::async, [&] {
 			units_slk = slk::SLK("Units/UnitData.slk");
 			// By making some changes to unitmetadata.slk and unitdata.slk we can avoid the 1->2->2 mapping for SLK->OE->W3U files. We have to add some columns for this though

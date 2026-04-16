@@ -1111,7 +1111,7 @@ export class Terrain: public QObject{
 
 				if (!result) {
 					std::println("Invalid model file {} for ramp: ({})", file_name, result.error());
-					result = resource_manager.load<CliffMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
+					result = resource_manager.load<CliffMesh>("Objects/Invalidmodel/Invalidmodel.mdx");
 				}
 
 				index = static_cast<int>(cliff_meshes.size());
