@@ -305,7 +305,40 @@ export class Units {
 	}
 
 	void create() {
-		// Load units multithreaded
+		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
+		// Without this, multiple threads block on shared_future::get() inside ResourceManager
+		// while only 1 thread actually constructs the shared mesh.
+		{
+			std::unordered_set<std::string> seen;
+			std::vector<std::future<void>> mesh_futures;
+
+			for (const auto& i : units) {
+				if (i.id == "sloc") {
+					continue;
+				}
+				if (seen.insert(i.id).second) {
+					std::string id = i.id;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id] {
+						get_mesh(id);
+					}));
+				}
+			}
+			for (const auto& i : items) {
+				if (seen.insert(i.id).second) {
+					std::string id = i.id;
+					mesh_futures.push_back(gl_thread_pool.submit([this, id] {
+						get_mesh(id);
+					}));
+				}
+			}
+
+			for (auto& f : mesh_futures) {
+				f.get();
+			}
+		}
+
+		// Phase 2: Init units. All meshes are now cached in id_to_mesh,
+		// so get_mesh() returns immediately without blocking in ResourceManager.
 		std::vector<std::future<void>> futures;
 		futures.reserve(units.size() + items.size());
 
@@ -441,16 +474,13 @@ export class Units {
 
 		mesh_path = fs::path(string_replaced(mesh_path.string(), "\\", "/"));
 
-		// Mesh doesn't exist at all
-		if (!hierarchy.file_exists(mesh_path)) {
-			std::println("Missing model file for {} With file path: {}", id, mesh_path.string());
-			auto mesh = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
-			std::lock_guard lock(mesh_mutex);
-			id_to_mesh.emplace(id, mesh);
-			return mesh;
+		auto result = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+		if (!result) {
+			std::println("Missing model file for {} with file path: {} ({})", id, mesh_path.string(), result.error());
+			result = resource_manager.load<SkinnedMesh>("Objects/Invalidmodel/Invalidmodel.mdx", "", std::nullopt);
 		}
 
-		auto mesh = resource_manager.load<SkinnedMesh>(mesh_path, "", std::nullopt);
+		auto mesh = result.value();
 		{
 			std::lock_guard lock(mesh_mutex);
 			id_to_mesh.emplace(id, mesh);

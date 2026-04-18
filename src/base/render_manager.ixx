@@ -48,13 +48,13 @@ export class RenderManager {
 	int window_height;
 
 	RenderManager() {
-		skinned_mesh_shader_sd = resource_manager.load<Shader>({"data/shaders/skinned_mesh_sd.vert", "data/shaders/skinned_mesh_sd.frag"});
-		skinned_mesh_shader_hd = resource_manager.load<Shader>({"data/shaders/skinned_mesh_hd.vert", "data/shaders/skinned_mesh_hd.frag"});
+		skinned_mesh_shader_sd = resource_manager.load<Shader>({"data/shaders/skinned_mesh_sd.vert", "data/shaders/skinned_mesh_sd.frag"}).value();
+		skinned_mesh_shader_hd = resource_manager.load<Shader>({"data/shaders/skinned_mesh_hd.vert", "data/shaders/skinned_mesh_hd.frag"}).value();
 		colored_skinned_shader = resource_manager.load<Shader>(
 			{"data/shaders/skinned_mesh_instance_color_coded.vert", "data/shaders/skinned_mesh_instance_color_coded.frag"}
-		);
+		).value();
 
-		click_helper = resource_manager.load<SkinnedMesh>("Objects/InvalidObject/InvalidObject.mdx", "", std::nullopt);
+		click_helper = resource_manager.load<SkinnedMesh>("Objects/InvalidObject/InvalidObject.mdx", "", std::nullopt).value();
 
 		glCreateFramebuffers(1, &color_picking_framebuffer);
 

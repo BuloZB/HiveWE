@@ -68,15 +68,20 @@ namespace casc {
 			unsigned bytes_read;
 			#endif
 			const bool success = CascReadFile(file_handle, buffer.data(), size, &bytes_read);
+			CascCloseFile(file_handle);
 			if (!success) {
 				return std::unexpected(std::format("Error failed to read file: {}\n", GetCascError()));
 			}
-			return BinaryReader(buffer);
+			return BinaryReader(std::move(buffer));
 		}
 
 		bool file_exists(const fs::path& path) const {
 			HANDLE file_handle = nullptr;
-			return CascOpenFile(handle, path.string().c_str(), 0, CASC_OPEN_BY_NAME, &file_handle);
+			const bool exists = CascOpenFile(handle, path.string().c_str(), 0, CASC_OPEN_BY_NAME, &file_handle);
+			if (exists) {
+				CascCloseFile(file_handle);
+			}
+			return exists;
 		}
 	};
 } // namespace casc

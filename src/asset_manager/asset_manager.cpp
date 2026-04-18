@@ -91,7 +91,7 @@ ObjectInfo resolve_used_by_id(const std::string& id) {
 	const auto category_icon = [](const std::string& section, char cat) -> QIcon {
 		for (const auto& [key, value] : world_edit_data.section(section)) {
 			if (!key.empty() && key.front() == cat) {
-				return resource_manager.load<QIconResource>(value[1])->icon;
+				return resource_manager.load<QIconResource>(value[1]).value()->icon;
 			}
 		}
 		return {};

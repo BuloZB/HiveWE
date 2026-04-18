@@ -59,10 +59,10 @@ export struct Doodad {
 		const auto path = slk.data<std::string_view>("pathtex", id);
 		const auto trimmed_path = trimmed(path);
 		if (!trimmed_path.empty() && trimmed_path != "none" && trimmed_path != "_") {
-			try {
-				pathing = resource_manager.load<PathingTexture>(trimmed_path);
-			} catch (const std::exception& e) {
-				std::println("Error load pathing texture for doodad with ID: {} and error {}", id, e.what());
+			if (auto result = resource_manager.load<PathingTexture>(trimmed_path)) {
+				pathing = *result;
+			} else {
+				std::println("Error loading pathing texture for doodad with ID: {} ({})", id, result.error());
 			}
 		}
 
@@ -228,10 +228,10 @@ export struct SpecialDoodad {
 		const auto path = doodads_slk.data<std::string_view>("pathtex", id);
 		const auto trimmed_path = trimmed(path);
 		if (!trimmed_path.empty() && trimmed_path != "none" && trimmed_path != "_") {
-			try {
-				pathing = resource_manager.load<PathingTexture>(trimmed_path);
-			} catch (const std::exception& e) {
-				std::println("Error load pathing texture for doodad with ID: {} and error {}", id, e.what());
+			if (auto result = resource_manager.load<PathingTexture>(trimmed_path)) {
+				pathing = *result;
+			} else {
+				std::println("Error loading pathing texture for doodad with ID: {} ({})", id, result.error());
 			}
 		}
 

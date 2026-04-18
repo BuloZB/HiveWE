@@ -1,5 +1,6 @@
 module;
 
+#include <stdexcept>
 #include <glad/glad.h>
 
 export module SkinnedMesh;
@@ -73,7 +74,7 @@ export class SkinnedMesh: public Resource {
 
 	explicit SkinnedMesh(const fs::path& path, std::optional<std::pair<int, std::string>> replaceable_id_override) {
 		if (path.extension() != ".mdx" && path.extension() != ".MDX") {
-			throw;
+			throw std::invalid_argument("SkinnedMesh requires .mdx file, got: " + path.string());
 		}
 
 		BinaryReader reader = [&] {
@@ -306,16 +307,16 @@ export class SkinnedMesh: public Resource {
 
 				if (replaceable_id_override && texture.replaceable_id == replaceable_id_override->first) {
 					textures.push_back(
-						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags))
+						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags)).value()
 					);
 				} else {
 					textures.push_back(resource_manager.load<GPUTexture>(
 						mdx::replaceable_id_to_texture.at(texture.replaceable_id) + suffix,
 						std::to_string(texture.flags)
-					));
+					).value());
 				}
 			} else {
-				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags)));
+				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags)).value());
 			}
 			// TODO we should have a unique texture resource for each combination of the below two settings
 			// Or emulate it in the shader?

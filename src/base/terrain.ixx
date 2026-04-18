@@ -33,7 +33,7 @@ using namespace std::literals::string_literals;
 
 export struct Corner {
 	bool map_edge = false;
-	int ground_texture = 0;
+	uint8_t ground_texture = 0;
 	float height = 0.f;
 	float water_height = 0.f;
 	bool ramp = false;
@@ -43,10 +43,10 @@ export struct Corner {
 	bool cliff = false;
 	bool romp = false;
 	bool special_doodad = false;
-	int ground_variation = 0;
-	int cliff_variation = 0;
-	int cliff_texture = 15;
-	int layer_height = 2;
+	uint8_t ground_variation = 0;
+	uint8_t cliff_variation = 0;
+	uint8_t cliff_texture = 15;
+	uint8_t layer_height = 2;
 };
 
 // total sum 570
@@ -98,7 +98,7 @@ export struct TilePathingg {
 	}
 };
 
-export class Terrain: public QObject {
+export class Terrain: public QObject{
 	Q_OBJECT
 
 	static constexpr int write_version = 12;
@@ -128,6 +128,13 @@ export class Terrain: public QObject {
 	GLuint water_exists_buffer;
 
   public:
+
+	static constexpr float min_ground_height = -16.f;
+	static constexpr float max_ground_height = 15.98f;  // ToDo why 15.98?
+
+	static constexpr int min_layer_height = 0;
+	static constexpr int max_layer_height = 15;
+
 	char tileset;
 	std::vector<std::string> tileset_ids;
 	std::vector<std::string> cliffset_ids;
@@ -145,11 +152,11 @@ export class Terrain: public QObject {
 	// SoA corner data — indexed as ci(x, y) = y * width + x
 	std::vector<float> corner_height;
 	std::vector<float> corner_water_height;
-	std::vector<int> corner_ground_texture;
-	std::vector<int> corner_ground_variation;
-	std::vector<int> corner_cliff_variation;
-	std::vector<int> corner_cliff_texture;
-	std::vector<int> corner_layer_height;
+	std::vector<uint8_t> corner_ground_texture;
+	std::vector<uint8_t> corner_ground_variation;
+	std::vector<uint8_t> corner_cliff_variation;
+	std::vector<uint8_t> corner_cliff_texture;
+	std::vector<uint8_t> corner_layer_height;
 	std::vector<uint8_t> corner_map_edge;
 	std::vector<uint8_t> corner_ramp;
 	std::vector<uint8_t> corner_blight;
@@ -411,7 +418,7 @@ export class Terrain: public QObject {
 			for (int j = 0; j < cliffs_variation_slk.data<int>("variations", i) + 1; j++) {
 				std::string file_name =
 					"Doodads/Terrain/Cliffs/Cliffs" + cliffs_variation_slk.index_to_row.at(i) + std::to_string(j) + ".mdx";
-				cliff_meshes.push_back(resource_manager.load<CliffMesh>(file_name));
+				cliff_meshes.push_back(resource_manager.load<CliffMesh>(file_name).value());
 				path_to_cliff.emplace(
 					cliffs_variation_slk.index_to_row.at(i) + std::to_string(j),
 					static_cast<int>(cliff_meshes.size()) - 1
@@ -423,20 +430,20 @@ export class Terrain: public QObject {
 		// Ground textures
 		for (const auto& tile_id : tileset_ids) {
 			ground_textures.push_back(
-				resource_manager.load<GroundTexture>(terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id))
+				resource_manager.load<GroundTexture>(terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id)).value()
 			);
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
 			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
 		blight_texture = static_cast<int>(ground_textures.size());
 		ground_texture_to_id.emplace("blight", blight_texture);
-		ground_textures.push_back(resource_manager.load<GroundTexture>(world_edit_data.data("TileSets", std::string(1, tileset), 1)));
+		ground_textures.push_back(resource_manager.load<GroundTexture>(world_edit_data.data("TileSets", std::string(1, tileset), 1)).value());
 		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		// Cliff Textures
 		for (const auto& cliff_id : cliffset_ids) {
 			cliff_textures.push_back(
-				resource_manager.load<Texture>(cliff_slk.data("texdir", cliff_id) + "/" + cliff_slk.data("texfile", cliff_id))
+				resource_manager.load<Texture>(cliff_slk.data("texdir", cliff_id) + "/" + cliff_slk.data("texfile", cliff_id)).value()
 			);
 			cliff_texture_size = std::max(cliff_texture_size, cliff_textures.back()->width);
 			cliff_to_ground_texture.push_back(ground_texture_to_id[cliff_slk.data<std::string_view>("groundtile", cliff_id)]);
@@ -495,7 +502,7 @@ export class Terrain: public QObject {
 			// Hack to force loading of SD water textures till I implement a water shader
 			const auto hd = hierarchy.hd;
 			hierarchy.hd = false;
-			const auto texture = resource_manager.load<Texture>(std::format("{}{:02}", file_name, i));
+			const auto texture = resource_manager.load<Texture>(std::format("{}{:02}", file_name, i)).value();
 			hierarchy.hd = hd;
 
 			if (texture->width != 128 || texture->height != 128) {
@@ -517,15 +524,15 @@ export class Terrain: public QObject {
 		}
 		glGenerateTextureMipmap(water_texture_array);
 
-		ground_shader = resource_manager.load<Shader>({"data/shaders/terrain.vert", "data/shaders/terrain.frag"});
-		cliff_shader = resource_manager.load<Shader>({"data/shaders/cliff.vert", "data/shaders/cliff.frag"});
-		water_shader = resource_manager.load<Shader>({"data/shaders/water.vert", "data/shaders/water.frag"});
+		ground_shader = resource_manager.load<Shader>({"data/shaders/terrain.vert", "data/shaders/terrain.frag"}).value();
+		cliff_shader = resource_manager.load<Shader>({"data/shaders/cliff.vert", "data/shaders/cliff.frag"}).value();
+		water_shader = resource_manager.load<Shader>({"data/shaders/water.vert", "data/shaders/water.frag"}).value();
 
 		setup_collision_shape(physics);
 
-		update_ground_textures({0, 0, width - 1, height - 1});
 		update_ground_heights({0, 0, width - 1, height - 1});
 		update_cliff_meshes({0, 0, width - 1, height - 1});
+		update_ground_textures({0, 0, width, height});
 		update_water({0, 0, width - 1, height - 1});
 
 		emit minimap_changed(minimap_image());
@@ -697,7 +704,7 @@ export class Terrain: public QObject {
 		for (const auto& tile_id : tileset_ids) {
 			ground_textures.push_back(resource_manager.load<GroundTexture>(
 				terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
-			));
+			).value());
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
 			gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 		}
@@ -705,7 +712,7 @@ export class Terrain: public QObject {
 		ground_texture_to_id.emplace("blight", blight_texture);
 		ground_textures.push_back(resource_manager.load<GroundTexture>(
 			world_edit_data.data("TileSets", std::string(1, tileset), 1) + (hierarchy.hd ? "_diffuse.dds" : ".dds")
-		));
+		).value());
 		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
 
 		glNamedBufferStorage(
@@ -723,47 +730,41 @@ export class Terrain: public QObject {
 		update_ground_textures({0, 0, width, height});
 	}
 
-	/// The texture of the tilepoint which is influenced by its surroundings. nearby cliff/ramp > blight > regular texture
+	/// The texture of the tile point which is influenced by its surroundings.
+	/// Nearby cliff/ramp > blight > regular texture
 	[[nodiscard]]
-	int real_tile_texture(const int x, const int y) const {
-		for (int i = -1; i < 1; i++) {
-			for (int j = -1; j < 1; j++) {
-				if (x + i >= 0 && x + i < width && y + j >= 0 && y + j < height) {
-					const size_t idx = ci(x + i, y + j);
-					if (corner_cliff[idx]) {
-						if (x + i < width - 1 && y + j < height - 1) {
-							const size_t bl = idx;
-							const size_t br = ci(x + i + 1, y + j);
-							const size_t tl = ci(x + i, y + j + 1);
-							const size_t tr = ci(x + i + 1, y + j + 1);
-
-							if (corner_ramp[bl] && corner_ramp[tl] && corner_ramp[br] && corner_ramp[tr] && !corner_romp[bl]
-								&& !corner_romp[br] && !corner_romp[tl] && !corner_romp[tr]) {
-								goto out_of_loop;
-							}
-						}
-					}
-
-					if (corner_romp[idx] || corner_cliff[idx]) {
-						int texture = corner_cliff_texture[idx];
-						// Number 15 seems to be something
-						if (texture == 15) {
-							texture -= 14;
-						}
-
-						return cliff_to_ground_texture[texture];
-					}
-				}
-			}
-		}
-	out_of_loop:
-
+	uint8_t real_tile_texture(const int x, const int y) const {
+		// We only need to check ourselves, to the left, bottom-left and bottom
 		const size_t idx = ci(x, y);
+		uint8_t a_romp = corner_romp[idx];
+		uint8_t a_cliff = corner_cliff[idx];
+		if (x > 0) {
+			a_romp |= corner_romp[idx - 1];
+			a_cliff |= corner_cliff[idx - 1];
+		}
+		if (y > 0) {
+			a_romp |= corner_romp[idx - width];
+			a_cliff |= corner_cliff[idx - width];
+		}
+		if (x > 0 && y > 0) {
+			a_romp |= corner_romp[idx - width - 1];
+			a_cliff |= corner_cliff[idx - width - 1];
+		}
+
+		if (a_romp || (a_cliff && !corner_ramp[idx])) {
+			int texture = corner_cliff_texture[idx];
+			// Number 15 seems to be something
+			if (texture == 15) {
+				texture -= 14;
+			}
+			return cliff_to_ground_texture[texture];
+		}
+
 		if (corner_blight[idx]) {
 			return blight_texture;
+		} else {
+			return corner_ground_texture[idx];
 		}
-
-		return corner_ground_texture[idx];
 	}
 
 	/// The subtexture of a groundtexture to use.
@@ -783,32 +784,6 @@ export class Terrain: public QObject {
 				return 15;
 			}
 		}
-	}
-
-	/// The 4 ground textures of the tilepoint. The first 16 bits are which texture array to use and the next 16 bits are which subtexture to use
-	glm::uvec4 get_texture_variations(const int x, const int y) const {
-		const int bottom_left = real_tile_texture(x, y);
-		const int bottom_right = real_tile_texture(x + 1, y);
-		const int top_left = real_tile_texture(x, y + 1);
-		const int top_right = real_tile_texture(x + 1, y + 1);
-
-		std::set<int> set({bottom_left, bottom_right, top_left, top_right});
-		glm::uvec4 tiles(0xFFFF); // 0xFFFF is a transparent black pixel in the fragment shader
-		int component = 1;
-
-		tiles.x = *set.begin() + (get_tile_variation(*set.begin(), corner_ground_variation[ci(x, y)]) << 16);
-		set.erase(set.begin());
-
-		std::bitset<4> index;
-		for (auto&& texture : set) {
-			index[0] = bottom_right == texture;
-			index[1] = bottom_left == texture;
-			index[2] = top_right == texture;
-			index[3] = top_left == texture;
-
-			tiles[component++] = texture + (index.to_ulong() << 16);
-		}
-		return tiles;
 	}
 
 	/// Returns the height at x,y by bilinear interpolation
@@ -978,7 +953,8 @@ export class Terrain: public QObject {
 				}
 
 				// Multiple iterations might set the same index so needs to be idempotent
-				const int base = std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
+				const int base =
+					std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
 				if (corner_layer_height[bl] == base) {
 					gpu_final_ground_heights[bl] = corner_height[bl] + corner_layer_height[bl] - 2.0f + 0.5f;
 				}
@@ -999,12 +975,49 @@ export class Terrain: public QObject {
 	}
 
 	/// Updates the ground texture variation information and uploads it to the GPU
+	/// Make sure update_cliff_meshes() is up to date on the target area
 	void update_ground_textures(const QRect& area) {
-		const QRect update_area = area.adjusted(-1, -1, 1, 1).intersected({0, 0, width - 1, height - 1});
+		const QRect update_area = area.adjusted(-2, -2, 2, 2).intersected({0, 0, width, height});
 
-		for (int j = update_area.top(); j <= update_area.bottom(); j++) {
-			for (int i = update_area.left(); i <= update_area.right(); i++) {
-				gpu_ground_texture_list[j * (width - 1) + i] = get_texture_variations(i, j);
+		const int x0 = update_area.x();
+		const int y0 = update_area.y();
+		const int scratch_width = update_area.width();
+		const int scratch_height = update_area.height();
+
+		std::vector<uint8_t> scratch(scratch_width * scratch_height);
+		for (int j = 0; j < scratch_height; ++j) {
+			for (int i = 0; i < scratch_width; ++i) {
+				scratch[j * scratch_width + i] = real_tile_texture(x0 + i, y0 + j);
+			}
+		}
+
+		for (int j = 0; j < scratch_height - 1; ++j) {
+			for (int i = 0; i < scratch_width - 1; ++i) {
+				const uint8_t bottom_left = scratch[j * scratch_width + i];
+				const uint8_t bottom_right = scratch[j * scratch_width + (i + 1)];
+				const uint8_t top_left = scratch[(j + 1) * scratch_width + i];
+				const uint8_t top_right = scratch[(j + 1) * scratch_width + (i + 1)];
+
+				uint16_t u[4] = {bottom_left, bottom_right, top_right, top_left};
+				std::sort(u, u + 4);
+				uint16_t* last = std::unique(u, u + 4);
+
+				const int tx = x0 + i;
+				const int ty = y0 + j;
+
+				glm::uvec4 out(0xFFFFu);
+				out.x = u[0] | get_tile_variation(u[0], corner_ground_variation[ci(tx, ty)]) << 16;
+
+				for (int k = 1; k < std::distance(u, last); ++k) {
+					uint32_t mask = 0;
+					mask |= static_cast<uint32_t>(bottom_right == u[k]);
+					mask |= static_cast<uint32_t>(bottom_left == u[k]) << 1;
+					mask |= static_cast<uint32_t>(top_right == u[k]) << 2;
+					mask |= static_cast<uint32_t>(top_left == u[k]) << 3;
+					out[k] = u[k] | mask << 16;
+				}
+
+				gpu_ground_texture_list[ty * (width - 1) + tx] = out;
 			}
 		}
 
@@ -1039,96 +1052,123 @@ export class Terrain: public QObject {
 
 	/// Updates the cliff and ramp meshes for an area
 	void update_cliff_meshes(const QRect& area) {
-		// Remove all existing cliff meshes in area
-		for (size_t i = cliffs.size(); i-- > 0;) {
-			const glm::ivec3& pos = cliffs[i];
-			if (area.contains(pos.x, pos.y)) {
-				cliffs.erase(cliffs.begin() + i);
-			}
-		}
+		// Cliffs and ramps may extend up to 2 corners outside `area`, so we recompute over an expanded region.
+		// Intersect with tile-coordinate bounds (i, j must be <= width-2 / height-2 for safe ci(i+1, j+1) access).
+		const QRect ramp_area = area.adjusted(-2, -2, 2, 2).intersected({0, 0, width - 1, height - 1});
 
-		for (int i = area.x(); i < area.right(); i++) {
-			for (int j = area.y(); j < area.bottom(); j++) {
+		// Remove existing cliffs.
+		std::erase_if(cliffs, [&](const glm::ivec3& p) {
+			return ramp_area.contains(p.x, p.y);
+		});
+
+		// Ramps can cause romp flags up to 2 outside area so need to use ramp_area
+		for (int j = ramp_area.top(); j <= ramp_area.bottom(); j++) {
+			for (int i = ramp_area.left(); i <= ramp_area.right(); i++) {
 				corner_romp[ci(i, j)] = false;
 			}
 		}
 
-		const QRect ramp_area = area.adjusted(-2, -2, 2, 2).intersected({0, 0, width, height});
-
-		// Cliff transition filename character: non-ramp corners encode as 'A'+offset, ramp corners as 'L'-4*offset
+		// Cliff transition filename character: non-ramp corners encode as 'A'+offset, ramp corners as 'L'-4*offset.
 		auto cliff_char = [&](const size_t idx, const int base) -> char {
 			const int offset = corner_layer_height[idx] - base;
 			return corner_ramp[idx] ? static_cast<char>('L' - 4 * offset) : static_cast<char>('A' + offset);
 		};
 
-		auto get_ramp_mesh_path =
-			[&](const int base, const size_t tl, const size_t tr, const size_t br, const size_t bl_corner) -> std::optional<std::string> {
-			std::string file_name = "doodads/terrain/clifftrans/clifftrans"s + cliff_char(tl, base) + cliff_char(tr, base)
-				+ cliff_char(br, base) + cliff_char(bl_corner, base) + "0.mdx";
-
-			if (!hierarchy.file_exists(file_name)) {
-				return {};
-			}
-
-			if (!path_to_cliff.contains(file_name)) {
-				cliff_meshes.push_back(resource_manager.load<CliffMesh>(file_name));
-				path_to_cliff.emplace(file_name, static_cast<int>(cliff_meshes.size()) - 1);
-			}
-
-			return file_name;
+		// Pack 4 cliff chars into a uint32 for use as a fast hash-map key.
+		auto pack_key = [](const char a, const char b, const char c, const char d) -> uint32_t {
+			return (static_cast<uint32_t>(static_cast<uint8_t>(a)) << 24) | (static_cast<uint32_t>(static_cast<uint8_t>(b)) << 16)
+				| (static_cast<uint32_t>(static_cast<uint8_t>(c)) << 8) | static_cast<uint32_t>(static_cast<uint8_t>(d));
 		};
 
-		// Add new cliff meshes
-		for (int i = ramp_area.x(); i < ramp_area.right(); i++) {
-			for (int j = ramp_area.y(); j < ramp_area.bottom(); j++) {
+		struct CliffEntry {
+			uint8_t max_variation = 0;
+			std::array<int, 2> indices {};
+		};
+
+		std::unordered_map<uint32_t, CliffEntry> cliff_cache;
+		// Many cells share the same packed key, so we resolve the path/variation table once per unique key.
+		std::unordered_map<uint32_t, std::optional<int>> ramp_cache;
+
+		auto get_ramp_mesh_index =
+			[&](const int base, const size_t tl, const size_t tr, const size_t br, const size_t bl) -> std::optional<int> {
+			const char c_tl = cliff_char(tl, base);
+			const char c_tr = cliff_char(tr, base);
+			const char c_br = cliff_char(br, base);
+			const char c_bl = cliff_char(bl, base);
+			const uint32_t key = pack_key(c_tl, c_tr, c_br, c_bl);
+
+			if (const auto it = ramp_cache.find(key); it != ramp_cache.end()) {
+				return it->second;
+			}
+
+			std::string file_name = "doodads/terrain/clifftrans/clifftrans"s + c_tl + c_tr + c_br + c_bl + "0.mdx";
+
+			int index;
+			if (const auto it = path_to_cliff.find(file_name); it != path_to_cliff.end()) {
+				index = it->second;
+			} else {
+				auto result = resource_manager.load<CliffMesh>(file_name);
+
+				if (!result) {
+					std::println("Invalid model file {} for ramp: ({})", file_name, result.error());
+					result = resource_manager.load<CliffMesh>("Objects/Invalidmodel/Invalidmodel.mdx");
+				}
+
+				index = static_cast<int>(cliff_meshes.size());
+				cliff_meshes.push_back(result.value());
+				path_to_cliff.emplace(std::move(file_name), index);
+			}
+			ramp_cache.emplace(key, index);
+			return index;
+		};
+
+		// Rebuild cliffs/ramps
+		for (int j = ramp_area.top(); j <= ramp_area.bottom(); j++) {
+			for (int i = ramp_area.left(); i <= ramp_area.right(); i++) {
 				const size_t bl = ci(i, j);
 				const size_t br = ci(i + 1, j);
 				const size_t tl = ci(i, j + 1);
 				const size_t tr = ci(i + 1, j + 1);
 
-				// Vertical ramps: 2-wide × 3-tall strip
-				if (j < height - 2) {
+				// Vertical ramps: 2-wide x 3-tall strip
+				if (corner_ramp[bl] != corner_ramp[br] && j < height - 2) {
 					const size_t ttl = ci(i, j + 2);
 					const size_t ttr = ci(i + 1, j + 2);
-
-					const int h_left = std::min(corner_layer_height[bl], corner_layer_height[ttl]);
-					const int h_right = std::min(corner_layer_height[br], corner_layer_height[ttr]);
 
 					const bool left_col_uniform = corner_ramp[bl] == corner_ramp[tl] && corner_ramp[bl] == corner_ramp[ttl];
 					const bool right_col_uniform = corner_ramp[br] == corner_ramp[tr] && corner_ramp[br] == corner_ramp[ttr];
 
-					if (corner_layer_height[tl] == h_left && corner_layer_height[tr] == h_right && left_col_uniform && right_col_uniform
-						&& corner_ramp[bl] != corner_ramp[br]) {
+					const int h_left = std::min(corner_layer_height[bl], corner_layer_height[ttl]);
+					const int h_right = std::min(corner_layer_height[br], corner_layer_height[ttr]);
+
+					if (corner_layer_height[tl] == h_left && corner_layer_height[tr] == h_right && left_col_uniform && right_col_uniform) {
 						const int base = std::min(h_left, h_right);
-						const auto ramp_mesh_path = get_ramp_mesh_path(base, bl, tl, br, br);
-						if (ramp_mesh_path) {
+						if (auto idx = get_ramp_mesh_index(base, ttl, ttr, br, bl); idx) {
 							corner_romp[bl] = true;
 							corner_romp[tl] = true;
-							cliffs.emplace_back(i, j, path_to_cliff.at(ramp_mesh_path.value()));
+							cliffs.emplace_back(i, j, *idx);
 							continue;
 						}
 					}
 				}
 
-				// Horizontal ramps: 3-wide × 2-tall strip
-				if (i < width - 2) {
+				// Horizontal ramps: 3-wide x 2-tall strip
+				if (corner_ramp[bl] != corner_ramp[tl] && i < width - 2) {
 					const size_t brr = ci(i + 2, j);
 					const size_t trr = ci(i + 2, j + 1);
 
 					const int h_bottom = std::min(corner_layer_height[bl], corner_layer_height[brr]);
 					const int h_top = std::min(corner_layer_height[tl], corner_layer_height[trr]);
 
-					bool bottom_row_uniform = corner_ramp[bl] == corner_ramp[br] && corner_ramp[bl] == corner_ramp[brr];
-					bool top_row_uniform = corner_ramp[tl] == corner_ramp[tr] && corner_ramp[tl] == corner_ramp[trr];
+					const bool bottom_row_uniform = corner_ramp[bl] == corner_ramp[br] && corner_ramp[bl] == corner_ramp[brr];
+					const bool top_row_uniform = corner_ramp[tl] == corner_ramp[tr] && corner_ramp[tl] == corner_ramp[trr];
 
-					if (corner_layer_height[br] == h_bottom && corner_layer_height[tr] == h_top && bottom_row_uniform && top_row_uniform
-						&& corner_ramp[bl] != corner_ramp[tl]) {
+					if (corner_layer_height[br] == h_bottom && corner_layer_height[tr] == h_top && bottom_row_uniform && top_row_uniform) {
 						const int base = std::min(h_bottom, h_top);
-						const auto ramp_mesh_path = get_ramp_mesh_path(base, tl, trr, brr, bl);
-						if (ramp_mesh_path) {
+						if (auto idx = get_ramp_mesh_index(base, tl, trr, brr, bl); idx) {
 							corner_romp[bl] = true;
 							corner_romp[br] = true;
-							cliffs.emplace_back(i, j, path_to_cliff.at(ramp_mesh_path.value()));
+							cliffs.emplace_back(i, j, *idx);
 							continue;
 						}
 					}
@@ -1145,18 +1185,30 @@ export class Terrain: public QObject {
 				const int base =
 					std::min({corner_layer_height[bl], corner_layer_height[br], corner_layer_height[tl], corner_layer_height[tr]});
 
-				// Cliff model path
-				std::string file_name = ""s + char('A' + corner_layer_height[tl] - base) + char('A' + corner_layer_height[tr] - base)
-					+ char('A' + corner_layer_height[br] - base) + char('A' + corner_layer_height[bl] - base);
+				const char c_tl = static_cast<char>('A' + corner_layer_height[tl] - base);
+				const char c_tr = static_cast<char>('A' + corner_layer_height[tr] - base);
+				const char c_br = static_cast<char>('A' + corner_layer_height[br] - base);
+				const char c_bl = static_cast<char>('A' + corner_layer_height[bl] - base);
 
-				if (file_name == "AAAA") {
+				if (c_tl == 'A' && c_tr == 'A' && c_br == 'A' && c_bl == 'A') {
 					continue;
 				}
 
-				// Clamp to within max variations
-				file_name += std::to_string(std::clamp(corner_cliff_variation[bl], 0, cliff_variations.at(file_name)));
+				const uint32_t key = pack_key(c_tl, c_tr, c_br, c_bl);
+				auto it = cliff_cache.find(key);
+				if (it == cliff_cache.end()) {
+					const std::string row_name {c_tl, c_tr, c_br, c_bl};
+					CliffEntry entry {};
+					entry.max_variation = cliff_variations.at(row_name);
+					const int variation_count = std::min(entry.max_variation + 1, static_cast<int>(entry.indices.size()));
+					for (int v = 0; v < variation_count; v++) {
+						entry.indices[v] = path_to_cliff.at(row_name + std::to_string(v));
+					}
+					it = cliff_cache.emplace(key, entry).first;
+				}
 
-				cliffs.emplace_back(i, j, path_to_cliff.at(file_name));
+				const int variation = std::clamp(corner_cliff_variation[bl], static_cast<uint8_t>(0), it->second.max_variation);
+				cliffs.emplace_back(i, j, it->second.indices[variation]);
 			}
 		}
 
@@ -1269,11 +1321,11 @@ export class Terrain: public QObject {
 		// Allocate new SoA arrays with defaults
 		std::vector<float> new_height_arr(new_total, 0.f);
 		std::vector<float> new_water_height(new_total, 0.f);
-		std::vector<int> new_ground_texture(new_total, 0);
-		std::vector<int> new_ground_variation(new_total, 0);
-		std::vector<int> new_cliff_variation(new_total, 0);
-		std::vector<int> new_cliff_texture(new_total, 15);
-		std::vector<int> new_layer_height(new_total, 2);
+		std::vector<uint8_t> new_ground_texture(new_total, 0);
+		std::vector<uint8_t> new_ground_variation(new_total, 0);
+		std::vector<uint8_t> new_cliff_variation(new_total, 0);
+		std::vector<uint8_t> new_cliff_texture(new_total, 15);
+		std::vector<uint8_t> new_layer_height(new_total, 2);
 		std::vector<uint8_t> new_map_edge(new_total, 0);
 		std::vector<uint8_t> new_ramp(new_total, 0);
 		std::vector<uint8_t> new_blight(new_total, 0);
@@ -1374,7 +1426,7 @@ export class Terrain: public QObject {
 
 		// update everything else
 		update_ground_heights({0, 0, width, height});
-		update_ground_textures({0, 0, width - 1, height - 1});
+		update_ground_textures({0, 0, width, height});
 		update_cliff_meshes({0, 0, width - 1, height - 1});
 		update_water({0, 0, width, height});
 

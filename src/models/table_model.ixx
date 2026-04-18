@@ -42,7 +42,7 @@ export class TableModel : public QAbstractTableModel {
 	explicit TableModel(slk::SLK* slk, slk::SLK* meta_slk, TriggerStrings* trigger_strings, QObject* parent = nullptr)
 		: QAbstractTableModel(parent), slk(slk), meta_slk(meta_slk), trigger_strings(trigger_strings) {
 
-		invalid_icon = resource_manager.load<QIconResource>("ReplaceableTextures/WorldEditUI/DoodadPlaceholder.dds");
+		invalid_icon = resource_manager.load<QIconResource>("ReplaceableTextures/WorldEditUI/DoodadPlaceholder.dds").value();
 	}
 
 	[[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override {
@@ -224,7 +224,7 @@ export class TableModel : public QAbstractTableModel {
 					}
 				}
 
-				path_to_icon[icon_path.string()] = resource_manager.load<QIconResource>(icon_path);
+				path_to_icon[icon_path.string()] = resource_manager.load<QIconResource>(icon_path).value();
 				return path_to_icon.at(icon_path.string())->icon;
 		}
 

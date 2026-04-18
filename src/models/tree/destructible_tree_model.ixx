@@ -65,7 +65,7 @@ export class DestructibleTreeModel : public BaseTreeModel {
 
 		for (const auto& [key, value] : world_edit_data.section("DestructibleCategories")) {
 			categories[key.front()].name = value[0];
-			categories[key.front()].icon = resource_manager.load<QIconResource>(value[1]);
+			categories[key.front()].icon = resource_manager.load<QIconResource>(value[1]).value();
 			categories[key.front()].item = new BaseTreeItem(rootItem);
 			categories[key.front()].item->baseCategory = true;
 			rowToCategory.push_back(key.front());

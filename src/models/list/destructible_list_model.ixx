@@ -17,7 +17,7 @@ export class DestructableListModel: public BaseListModel {
 	explicit DestructableListModel(QObject* parent = nullptr) : BaseListModel(destructibles_slk, parent) {
 		for (auto&& [key, value] : world_edit_data.section("DestructibleCategories")) {
 			const std::string tileset_key = value.front();
-			icons[key.front()] = resource_manager.load<QIconResource>(value[1]);
+			icons[key.front()] = resource_manager.load<QIconResource>(value[1]).value();
 		}
 	}
 

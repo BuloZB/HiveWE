@@ -17,7 +17,7 @@ export class DoodadListModel: public BaseListModel {
 	explicit DoodadListModel(QObject* parent) : BaseListModel(doodads_slk, parent) {
 		for (auto&& [key, value] : world_edit_data.section("DoodadCategories")) {
 			const std::string tileset_key = value.front();
-			icons[key.front()] = resource_manager.load<QIconResource>(value[1]);
+			icons[key.front()] = resource_manager.load<QIconResource>(value[1]).value();
 		}
 	}
 

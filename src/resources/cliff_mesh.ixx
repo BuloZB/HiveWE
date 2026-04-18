@@ -1,3 +1,7 @@
+module;
+
+#include <stdexcept>
+
 export module CliffMesh;
 
 import std;
@@ -24,27 +28,29 @@ export class CliffMesh : public Resource {
 	std::vector<glm::vec4> render_jobs;
 
 	explicit CliffMesh(const fs::path& path) {
-		if (path.extension() == ".mdx" || path.extension() == ".MDX") {
-			auto reader = hierarchy.open_file(path).value();
-			const mdx::MDX model = mdx::MDX(reader);
-
-			auto set = model.geosets.front();
-
-			glCreateBuffers(1, &vertex_buffer);
-			glNamedBufferData(vertex_buffer, static_cast<int>(set.vertices.size() * sizeof(glm::vec3)), set.vertices.data(), GL_STATIC_DRAW);
-
-			glCreateBuffers(1, &uv_buffer);
-			glNamedBufferData(uv_buffer, static_cast<int>(set.uv_sets.front().size() * sizeof(glm::vec2)), set.uv_sets.front().data(), GL_STATIC_DRAW);
-
-			glCreateBuffers(1, &normal_buffer);
-			glNamedBufferData(normal_buffer, static_cast<int>(set.normals.size() * sizeof(glm::vec3)), set.normals.data(), GL_STATIC_DRAW);
-
-			glCreateBuffers(1, &instance_buffer);
-
-			indices = set.faces.size();
-			glCreateBuffers(1, &index_buffer);
-			glNamedBufferData(index_buffer, static_cast<int>(set.faces.size() * sizeof(uint16_t)), set.faces.data(), GL_STATIC_DRAW);
+		if (path.extension() != ".mdx" && path.extension() != ".MDX") {
+			throw std::invalid_argument("CliffMesh requires .mdx file, got: " + path.string());
 		}
+
+		auto reader = hierarchy.open_file(path).value();
+		const mdx::MDX model = mdx::MDX(reader);
+
+		const auto set = model.geosets.front();
+
+		glCreateBuffers(1, &vertex_buffer);
+		glNamedBufferData(vertex_buffer, static_cast<int>(set.vertices.size() * sizeof(glm::vec3)), set.vertices.data(), GL_STATIC_DRAW);
+
+		glCreateBuffers(1, &uv_buffer);
+		glNamedBufferData(uv_buffer, static_cast<int>(set.uv_sets.front().size() * sizeof(glm::vec2)), set.uv_sets.front().data(), GL_STATIC_DRAW);
+
+		glCreateBuffers(1, &normal_buffer);
+		glNamedBufferData(normal_buffer, static_cast<int>(set.normals.size() * sizeof(glm::vec3)), set.normals.data(), GL_STATIC_DRAW);
+
+		glCreateBuffers(1, &instance_buffer);
+
+		indices = set.faces.size();
+		glCreateBuffers(1, &index_buffer);
+		glNamedBufferData(index_buffer, static_cast<int>(set.faces.size() * sizeof(uint16_t)), set.faces.data(), GL_STATIC_DRAW);
 	}
 
 	~CliffMesh() {

@@ -57,58 +57,53 @@ export class Hierarchy {
 	auto open_file(const fs::path& path) const -> std::expected<BinaryReader, std::string> {
 		const std::string path_str = path.string();
 
-		using Candidate = std::function<std::expected<BinaryReader, std::string>()>;
+		#define TRY_OPEN(expr)                \
+				if (auto file = (expr); file) {   \
+				return file;                   \
+				}
 
-		const std::vector<Candidate> candidates {
-			[&] {
-				return read_file("data/overrides" / path);
-			},
-			[&] {
-				return local_files ? read_file(root_directory / path) : std::unexpected("skip");
-			},
-			[&] {
-				return (hd && teen) ? map_file_read("_hd.w3mod:_teen.w3mod:" + path_str) : std::unexpected("skip");
-			},
-			[&] {
-				return hd ? map_file_read("_hd.w3mod:" + path_str) : std::unexpected("skip");
-			},
-			[&] {
-				return map_file_read(path);
-			},
-			[&] {
-				return hd ? game_data.open_file(std::format("war3.w3mod:_hd.w3mod:_tilesets/{}.w3mod:{}", tileset, path_str))
-						  : std::unexpected("skip");
-			},
-			[&] {
-				return (hd && teen) ? game_data.open_file("war3.w3mod:_hd.w3mod:_teen.w3mod:"s + path_str) : std::unexpected("skip");
-			},
-			[&] {
-				return hd ? game_data.open_file("war3.w3mod:_hd.w3mod:"s + path_str) : std::unexpected("skip");
-			},
-			[&] {
-				return game_data.open_file(std::format("war3.w3mod:_tilesets/{}.w3mod:{}", tileset, path_str));
-			},
-			[&] {
-				return game_data.open_file(std::format("war3.w3mod:_locales/{}.w3mod:{}", locale, path_str));
-			},
-			[&] {
-				return teen ? game_data.open_file("war3.w3mod:_teen.w3mod:"s + path_str) : std::unexpected("skip");
-			},
-			[&] {
-				return game_data.open_file("war3.w3mod:"s + path_str);
-			},
-			[&] {
-				return game_data.open_file("war3.w3mod:_deprecated.w3mod:"s + path_str);
-			},
-			[&] {
-				return aliases.exists(path_str) ? open_file(aliases.alias(path_str)) : std::unexpected("skip");
-			},
-		};
+		TRY_OPEN(read_file("data/overrides" / path));
 
-		for (const auto& candidate : candidates) {
-			if (const auto res = candidate(); res) {
-				return res;
-			}
+		if (local_files) {
+			TRY_OPEN(read_file(root_directory / path));
+		}
+
+		if (hd && teen) {
+			TRY_OPEN(map_file_read("_hd.w3mod:_teen.w3mod:" + path_str));
+		}
+
+		if (hd) {
+			TRY_OPEN(map_file_read("_hd.w3mod:" + path_str));
+		}
+
+		TRY_OPEN(map_file_read(path));
+
+		if (hd) {
+			TRY_OPEN(game_data.open_file(std::format("war3.w3mod:_hd.w3mod:_tilesets/{}.w3mod:{}", tileset, path_str)));
+		}
+
+		if (hd && teen) {
+			TRY_OPEN(game_data.open_file("war3.w3mod:_hd.w3mod:_teen.w3mod:"s + path_str));
+		}
+
+		if (hd) {
+			TRY_OPEN(game_data.open_file("war3.w3mod:_hd.w3mod:"s + path_str));
+		}
+
+		TRY_OPEN(game_data.open_file(std::format("war3.w3mod:_tilesets/{}.w3mod:{}", tileset, path_str)));
+		TRY_OPEN(game_data.open_file(std::format("war3.w3mod:_locales/{}.w3mod:{}", locale, path_str)));
+
+		if (teen) {
+			TRY_OPEN(game_data.open_file("war3.w3mod:_teen.w3mod:"s + path_str));
+		}
+
+		TRY_OPEN(game_data.open_file("war3.w3mod:"s + path_str));
+		TRY_OPEN(game_data.open_file("war3.w3mod:_deprecated.w3mod:"s + path_str));
+
+		#undef TRY_OPEN
+
+		if (aliases.exists(path_str)) {
+			return open_file(aliases.alias(path_str));
 		}
 
 		return std::unexpected(path_str + " could not be found in the hierarchy");

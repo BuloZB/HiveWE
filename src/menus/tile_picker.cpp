@@ -17,7 +17,7 @@ TilePicker::TilePicker(QWidget* parent, std::vector<std::string> from_ids, std::
 
 	const slk::SLK& slk = map->terrain.terrain_slk;
 	for (const auto& i :from_ids) {
-		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i));
+		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i)).value();
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
 		QPushButton* button = new QPushButton;
@@ -33,7 +33,7 @@ TilePicker::TilePicker(QWidget* parent, std::vector<std::string> from_ids, std::
 	}
 
 	for (const auto& i :to_ids) {
-		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i));
+		const auto image = resource_manager.load<Texture>(slk.data("dir", i) + "\\" + slk.data("file", i)).value();
 		const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
 		QPushButton* button = new QPushButton;

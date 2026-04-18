@@ -1,5 +1,6 @@
 module;
 
+#include <glad/glad.h>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QSurfaceFormat>
@@ -39,6 +40,8 @@ export class GLThreadPool {
 				tasks.pop();
 			}
 			task();
+			// Required so shared buffer/texture data is visible to the main context in time for first render.
+			glFlush();
 		}
 
 		ctx->doneCurrent();
