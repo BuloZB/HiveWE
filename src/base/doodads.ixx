@@ -1,6 +1,7 @@
 module;
 
 #include <QRectF>
+#include <tracy/Tracy.hpp>
 
 export module Doodads;
 
@@ -163,6 +164,7 @@ export class Doodads {
 	}
 
 	void create(Terrain& terrain, PathingMap& pathing_map) {
+		ZoneScoped("Creating Doodads");
 		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
 		// Without this, multiple threads block on shared_future::get() inside ResourceManager
 		// while only 1 thread actually constructs the shared mesh.

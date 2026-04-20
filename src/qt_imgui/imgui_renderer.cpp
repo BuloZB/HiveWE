@@ -177,7 +177,7 @@ void ImGuiRenderer::renderDrawList(ImDrawData *draw_data)
             }
             else
             {
-                glBindTexture(GL_TEXTURE_2D, (GLuint)(size_t)pcmd->TextureId);
+                glBindTexture(GL_TEXTURE_2D, (GLuint)pcmd->GetTexID());
                 glScissor((int)pcmd->ClipRect.x, (int)(fb_height - pcmd->ClipRect.w), (int)(pcmd->ClipRect.z - pcmd->ClipRect.x), (int)(pcmd->ClipRect.w - pcmd->ClipRect.y));
                 glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, idx_buffer_offset);
             }

@@ -3,6 +3,8 @@
 #include <QTimer>
 #include <QPainter>
 
+#include <tracy/Tracy.hpp>
+
 import std;
 import OpenGLUtilities;
 import Camera;
@@ -244,6 +246,8 @@ void GLWidget::paintGL() {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
+
+	FrameMark;
 }
 
 void GLWidget::keyPressEvent(QKeyEvent* event) {

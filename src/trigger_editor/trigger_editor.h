@@ -6,6 +6,7 @@
 #include <QTreeWidget>
 #include <QPlainTextEdit>
 #include <QKeyEvent>
+#include <QElapsedTimer>
 
 #include <vector>
 #include <string>

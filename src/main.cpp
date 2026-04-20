@@ -23,7 +23,11 @@ __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 }
 #endif
 
+#include <tracy/Tracy.hpp>
+
 int main(int argc, char* argv[]) {
+	ZoneScopedN("main");
+
 	QSurfaceFormat format;
 	format.setDepthBufferSize(24);
 	format.setStencilBufferSize(8);

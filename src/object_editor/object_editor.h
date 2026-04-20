@@ -8,6 +8,7 @@
 #include "DockAreaWidget.h"
 #include <QTreeView>
 #include <QSortFilterProxyModel>
+#include <QElapsedTimer>
 
 #include "global_search.h"
 #include "nlohmann/json.hpp"
