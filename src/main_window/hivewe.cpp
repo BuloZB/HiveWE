@@ -30,6 +30,8 @@ import "object_editor/icon_view.h";
 import "trigger_editor.h";
 #include "QMessageBox"
 #include "QProcess"
+#include "QKeySequence"
+#include "QString"
 import "menus/gameplay_constants_editor.h";
 import "asset_manager/asset_manager.h";
 
@@ -134,7 +136,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(new QShortcut(Qt::Key_F5, this), &QShortcut::activated, [&]() {
 		QSettings settings;
 		QFile file("data/themes/" + settings.value("theme").toString() + ".qss");
-		file.open(QFile::ReadOnly);
+		const auto success = file.open(QFile::ReadOnly);
+		if (!success) {
+			std::println("Failed to open theme file");
+			return;
+		}
 		QString StyleSheet = QLatin1String(file.readAll());
 
 		qApp->setStyleSheet(StyleSheet);
