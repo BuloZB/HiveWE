@@ -25,8 +25,21 @@ __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 
 #include <tracy/Tracy.hpp>
 
+import std;
+import Map;
+import Timer;
+import MapGlobal;
+import Globals;
+import Utilities;
+import Hierarchy;
+import BinaryReader;
+import GLThreadPool;
+namespace fs = std::filesystem;
+
 int main(int argc, char* argv[]) {
 	ZoneScopedN("main");
+
+	Timer start_timer;
 
 	QSurfaceFormat format;
 	format.setDepthBufferSize(24);
@@ -80,7 +93,7 @@ int main(int argc, char* argv[]) {
 	ads::CDockManager::setConfigFlag(ads::CDockManager::OpaqueSplitterResize);
 	ads::CDockManager::setConfigFlag(ads::CDockManager::MiddleMouseButtonClosesTab);
 
-	const QSettings settings;
+	QSettings settings;
 	QFile file("data/themes/" + settings.value("theme", "Dark").toString() + ".qss");
 	if (!file.open(QIODevice::ReadOnly)) {
 		qWarning() << "Error: Reading theme failed:" << file.error() << ": " << file.errorString();
@@ -89,6 +102,43 @@ int main(int argc, char* argv[]) {
 
 	a.setStyleSheet(QLatin1String(file.readAll()));
 
+	const auto casc_future = std::async(std::launch::async, [&]() {
+		fs::path directory = find_warcraft_directory();
+
+		while (!hierarchy.open_casc(directory)) {
+			directory = QFileDialog::getExistingDirectory(nullptr, "Select Warcraft Directory", "/home", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks).toStdWString();
+			if (directory == "") {
+				exit(EXIT_SUCCESS);
+			}
+		}
+		settings.setValue("warcraftDirectory", QString::fromStdString(directory.string()));
+
+		// Place common.j and blizzard.j in the data folder. Required by JassHelper
+		BinaryReader common = hierarchy.open_file("scripts/common.j").value();
+		std::ofstream output("data/tools/common.j");
+		output.write(reinterpret_cast<char*>(common.buffer.data()), common.buffer.size());
+		BinaryReader blizzard = hierarchy.open_file("scripts/blizzard.j").value();
+		std::ofstream output2("data/tools/blizzard.j");
+		output2.write(reinterpret_cast<char*>(blizzard.buffer.data()), blizzard.buffer.size());
+
+		world_edit_strings.load("UI/WorldEditStrings.txt");
+		world_edit_game_strings.load("UI/WorldEditGameStrings.txt");
+		world_edit_data.load("UI/WorldEditData.txt");
+
+		world_edit_data.substitute(world_edit_game_strings, "WorldEditStrings");
+		world_edit_data.substitute(world_edit_strings, "WorldEditStrings");
+	});
+
+	gl_thread_pool.init(8);
+
 	HiveWE w;
+
+	casc_future.wait();
+
+	std::println("Application start: {}ms", start_timer.elapsed_ms());
+
+	map->load("data/test map/");
+	// map->load("C:/Users/User/Desktop/MCFC.w3x");
+
 	return QApplication::exec();
 }

@@ -9,6 +9,7 @@ module;
 export module GLThreadPool;
 
 import std;
+import "glad/glad.h";
 
 export class GLThreadPool {
 	std::mutex mutex;

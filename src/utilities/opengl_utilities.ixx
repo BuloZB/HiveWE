@@ -1,6 +1,5 @@
 module;
 
-#include <QSettings>
 #include <QPainter>
 #include <QIcon>
 
@@ -68,16 +67,3 @@ export QIcon texture_to_icon(const fs::path& path) {
 	const auto pix = QPixmap::fromImage(temp_image);
 	return QIcon(pix);
 };
-
-export fs::path find_warcraft_directory() {
-	QSettings settings;
-	if (settings.contains("warcraftDirectory")) {
-		return settings.value("warcraftDirectory").toString().toStdString();
-	} else if (fs::exists("C:/Program Files/Warcraft III")) {
-		return "C:/Program Files/Warcraft III";
-	} else if (fs::exists("C:/Program Files (x86)/Warcraft III")) {
-		return "C:/Program Files (x86)/Warcraft III";
-	} else {
-		return "";
-	}
-}

@@ -76,7 +76,7 @@ export struct Physics {
 	btSequentialImpulseConstraintSolver* solver;
 	btDiscreteDynamicsWorld* dynamicsWorld;
 
-	PhysicsDebugDraw* draw;
+	// PhysicsDebugDraw* draw;
 
 	explicit Physics() {
 		broadphase = new btDbvtBroadphase();
@@ -86,9 +86,9 @@ export struct Physics {
 		dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
 		dynamicsWorld->setGravity(btVector3(0, 0, gravity));
 
-		draw = new PhysicsDebugDraw;
-		draw->setDebugMode(draw->getDebugMode() | btIDebugDraw::DBG_DrawAabb);
-		dynamicsWorld->setDebugDrawer(draw);
+		// draw = new PhysicsDebugDraw;
+		// draw->setDebugMode(draw->getDebugMode() | btIDebugDraw::DBG_DrawAabb);
+		// dynamicsWorld->setDebugDrawer(draw);
 	}
 
 	~Physics() {
@@ -97,6 +97,6 @@ export struct Physics {
 		delete dispatcher;
 		delete collisionConfiguration;
 		delete broadphase;
-		delete draw;
+		// delete draw;
 	}
 };
