@@ -315,9 +315,10 @@ export class BaseFilter : public QSortFilterProxyModel {
 	}
 
   public slots:
-	void setFilterCustom(bool filter) {
+	void setFilterCustom(const bool filter) {
+		beginFilterChange();
 		filterCustom = filter;
-		invalidateFilter();
+		endFilterChange(Direction::Rows);
 	}
 };
 

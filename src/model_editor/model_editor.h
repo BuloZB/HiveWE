@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <QElapsedTimer>
 namespace fs = std::filesystem;
 #include <expected>
 

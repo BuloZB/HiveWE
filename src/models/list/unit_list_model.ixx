@@ -112,8 +112,9 @@ export class UnitListFilter: public QSortFilterProxyModel {
   public slots:
 
 	void setFilterRace(const QString& race) {
+  		beginFilterChange();
 		filterRace = race;
-		invalidateFilter();
+  		endFilterChange(Direction::Rows);
 	}
 };
 

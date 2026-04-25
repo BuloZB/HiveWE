@@ -1,3 +1,7 @@
+module;
+
+#include <QSettings>
+
 export module Utilities;
 
 import std;
@@ -264,4 +268,17 @@ transform_aabb_non_uniform(const glm::vec3& min, const glm::vec3& max, glm::vec3
 
 	new_min = glm::min(p1, glm::min(p2, glm::min(p3, glm::min(p4, glm::min(p5, glm::min(p6, glm::min(p7, p8)))))));
 	new_max = glm::max(p1, glm::max(p2, glm::max(p3, glm::max(p4, glm::max(p5, glm::max(p6, glm::max(p7, p8)))))));
+}
+
+export fs::path find_warcraft_directory() {
+	QSettings settings;
+	if (settings.contains("warcraftDirectory")) {
+		return settings.value("warcraftDirectory").toString().toStdString();
+	} else if (fs::exists("C:/Program Files/Warcraft III")) {
+		return "C:/Program Files/Warcraft III";
+	} else if (fs::exists("C:/Program Files (x86)/Warcraft III")) {
+		return "C:/Program Files (x86)/Warcraft III";
+	} else {
+		return "";
+	}
 }

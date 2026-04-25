@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <memory>
+#include <QElapsedTimer>
 #define QT_NO_OPENGL
 #include <QObject>
 #include <QOpenGLWidget>

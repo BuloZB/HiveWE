@@ -3,11 +3,8 @@
 #include "StormLib.h"
 
 import std;
-import GLThreadPool;
 import Hierarchy;
-import BinaryReader;
 import MPQ;
-import OpenGLUtilities;
 import Camera;
 import Globals;
 import Map;
@@ -30,6 +27,8 @@ import "object_editor/icon_view.h";
 import "trigger_editor.h";
 #include "QMessageBox"
 #include "QProcess"
+#include "QKeySequence"
+#include "QString"
 import "menus/gameplay_constants_editor.h";
 import "asset_manager/asset_manager.h";
 
@@ -43,36 +42,8 @@ HiveWE::HiveWE(QWidget* parent)
 	// setWindowFlag(Qt::ExpandedClientAreaHint, true);
 	// setWindowFlag(Qt::NoTitleBarBackgroundHint, true);
 	// setAttribute(Qt::WA_LayoutOnEntireRect, true);
-
-	fs::path directory = find_warcraft_directory();
-
-	QSettings settings;
-	while (!hierarchy.open_casc(directory)) {
-		directory = QFileDialog::getExistingDirectory(this, "Select Warcraft Directory", "/home", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks).toStdWString();
-		if (directory == "") {
-			exit(EXIT_SUCCESS);
-		}
-	}
-	settings.setValue("warcraftDirectory", QString::fromStdString(directory.string()));
-
-	// Place common.j and blizzard.j in the data folder. Required by JassHelper
-	BinaryReader common = hierarchy.open_file("scripts/common.j").value();
-	std::ofstream output("data/tools/common.j");
-	output.write(reinterpret_cast<char*>(common.buffer.data()), common.buffer.size());
-	BinaryReader blizzard = hierarchy.open_file("scripts/blizzard.j").value();
-	std::ofstream output2("data/tools/blizzard.j");
-	output2.write(reinterpret_cast<char*>(blizzard.buffer.data()), blizzard.buffer.size());
-
 	ui.setupUi(this);
 	context = ui.widget;
-	restore_window_state();
-
-	world_edit_strings.load("UI/WorldEditStrings.txt");
-	world_edit_game_strings.load("UI/WorldEditGameStrings.txt");
-	world_edit_data.load("UI/WorldEditData.txt");
-
-	world_edit_data.substitute(world_edit_game_strings, "WorldEditStrings");
-	world_edit_data.substitute(world_edit_strings, "WorldEditStrings");
 
 	connect(ui.ribbon->undo, &QPushButton::clicked, [&]() {
 		// ToDo: temporary, undoing should still allow a selection to persist
@@ -134,7 +105,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(new QShortcut(Qt::Key_F5, this), &QShortcut::activated, [&]() {
 		QSettings settings;
 		QFile file("data/themes/" + settings.value("theme").toString() + ".qss");
-		file.open(QFile::ReadOnly);
+		const auto success = file.open(QFile::ReadOnly);
+		if (!success) {
+			std::println("Failed to open theme file");
+			return;
+		}
 		QString StyleSheet = QLatin1String(file.readAll());
 
 		qApp->setStyleSheet(StyleSheet);
@@ -202,8 +177,6 @@ HiveWE::HiveWE(QWidget* parent)
 		open_palette<PathingPalette>();
 	});
 
-	setAutoFillBackground(true);
-
 	connect(ui.ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		const auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
@@ -230,19 +203,18 @@ HiveWE::HiveWE(QWidget* parent)
 		window_handler.create_or_raise<AssetManager>(nullptr, created);
 	});
 
+	restore_window_state();
+
 	minimap->setParent(ui.widget);
 	minimap->move(10, 10);
 	minimap->show();
 
 	connect(minimap, &Minimap::clicked, [](QPointF location) { camera.position = { location.x() * map->terrain.width, (1.0 - location.y()) * map->terrain.height, camera.position.z }; });
 	ui.widget->makeCurrent();
-	gl_thread_pool.init(8);
+
 	map = new Map();
 	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
 
-	ui.widget->makeCurrent();
-	map->load("data/test map/");
-	// map->load("C:/Users/User/Desktop/MCFC.w3x");
 	map->render_manager.resize_framebuffers(ui.widget->width(), ui.widget->height());
 }
 

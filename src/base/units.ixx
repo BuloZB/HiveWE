@@ -2,6 +2,7 @@ module;
 
 #include <QRect>
 #include <absl/strings/str_split.h>
+#include <tracy/Tracy.hpp>
 
 export module Units;
 
@@ -305,6 +306,7 @@ export class Units {
 	}
 
 	void create() {
+		ZoneScoped("Creating Units");
 		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
 		// Without this, multiple threads block on shared_future::get() inside ResourceManager
 		// while only 1 thread actually constructs the shared mesh.

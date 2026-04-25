@@ -30,10 +30,11 @@ find_package(unordered_dense CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(mimalloc CONFIG REQUIRED)
 find_package(unofficial-qscintilla CONFIG REQUIRED)
+find_package(tracy CONFIG REQUIRED)
 
 qt_standard_project_setup()
 
-add_executable(HiveWE 
+add_executable(HiveWE
 	${QT_RESOURCES}
 )
 
@@ -80,6 +81,7 @@ target_link_libraries(HiveWE PUBLIC
 	nlohmann_json::nlohmann_json
 	unofficial::qscintilla::qscintilla
 	${BULLET_LIBRARIES}
+	Tracy::TracyClient
 )
 
 target_compile_options(HiveWE PRIVATE
@@ -93,6 +95,14 @@ target_compile_definitions(HiveWE PRIVATE
 	$<$<CXX_COMPILER_ID:Clang>:TBB_SUPPRESS_DEPRECATED_MESSAGES>
 	$<$<CXX_COMPILER_ID:GNU>:TBB_SUPPRESS_DEPRECATED_MESSAGES>
 )
+
+if(TRACY_ENABLE)
+	target_compile_definitions(HiveWE PRIVATE TRACY_ENABLE)
+endif()
+
+if(TRACY_NO_EXIT)
+	target_compile_definitions(HiveWE PRIVATE TRACY_NO_EXIT)
+endif()
 
 if(WIN32)
 	target_link_libraries(HiveWE PUBLIC CascLib::casc)

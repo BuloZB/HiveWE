@@ -40,6 +40,19 @@
       }
     },
     {
+      "name": "releasetracing",
+      "inherits": "default",
+      "displayName": "ReleaseTracing",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+        "CMAKE_VISIBILITY_PRESET": "hidden",
+        "CMAKE_VISIBILITY_INLINES_HIDDEN": "ON",
+        "TRACY_ENABLE": "ON",
+        "TRACY_NO_EXIT": "ON"
+      }
+    },
+    {
       "name": "release",
       "inherits": "default",
       "displayName": "Release",
@@ -58,8 +71,8 @@
       "configuration": "Debug"
     },
     {
-      "name": "RelWithDebInfo",
-      "configurePreset": "relwithdebinfo",
+      "name": "RelWithDebInfoTracing",
+      "configurePreset": "releasetracing",
       "configuration": "RelWithDebInfo"
     },
     {

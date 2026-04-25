@@ -92,13 +92,15 @@ export class DoodadListFilter : public QSortFilterProxyModel {
 
 public:
 	void setFilterCategory(const QString& category) {
+		beginFilterChange();
 		filterCategory = category;
-		invalidateFilter();
+		endFilterChange(Direction::Rows);
 	}
 
 	void setFilterTileset(const char tileset) {
+		beginFilterChange();
 		filterTileset = tileset;
-		invalidateFilter();
+		endFilterChange(Direction::Rows);
 	}
 
 	using QSortFilterProxyModel::QSortFilterProxyModel;
