@@ -2,11 +2,9 @@
 
 #extension GL_ARB_bindless_texture : require
 
-layout (location = 1) uniform float alpha_test;
-layout (location = 2) uniform bool show_lighting;
+layout (location = 2) uniform bool render_lighting;
 layout (location = 3) uniform vec3 light_direction;
 layout (location = 5) uniform int layer_index;
-layout (location = 10) uniform bool is_team_color;
 
 struct LayerTextureIds {
 	uint albedo;
@@ -19,12 +17,23 @@ struct LayerTextureIds {
 	uint _pad1;
 };
 
+struct LayerParams {
+	float alpha_test;
+	uint  layer_lit;
+	uint  is_team_color;
+	uint  _pad;
+};
+
 layout(std430, binding = 9) buffer TextureHandles {
 	sampler2D textures[];
 };
 
 layout(std430, binding = 10) buffer LayerTexturesBuf {
 	LayerTextureIds layer_textures[];
+};
+
+layout(std430, binding = 11) buffer LayerParamsBuf {
+	LayerParams layer_params[];
 };
 
 in vec2 UV;
@@ -36,14 +45,15 @@ out vec4 color;
 
 void main() {
 	LayerTextureIds ids = layer_textures[layer_index];
+	LayerParams p = layer_params[layer_index];
 
 	color = texture(textures[ids.albedo], UV) * vertexColor;
 
-	if (color.a < alpha_test) {
+	if (color.a < p.alpha_test) {
 		discard;
 	}
 
-	if (show_lighting) {
+	if (p.layer_lit != 0u && render_lighting) {
 		vec3 emissive_texel = texture(textures[ids.emissive], UV).rgb;
 		vec4 orm_texel = texture(textures[ids.orm], UV);
 		vec3 tc_texel = texture(textures[ids.team_color], UV).rgb;

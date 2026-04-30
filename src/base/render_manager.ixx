@@ -160,7 +160,6 @@ export class RenderManager {
 
 		skinned_mesh_shader_sd->use();
 		glUniformMatrix4fv(0, 1, false, &camera.projection_view[0][0]);
-		glUniform1f(1, -1.0f);
 		glUniform3fv(3, 1, &light_direction.x);
 
 		for (const auto& i : skinned_transparent_instances) {
@@ -169,7 +168,6 @@ export class RenderManager {
 
 		skinned_mesh_shader_hd->use();
 		glUniformMatrix4fv(0, 1, false, &camera.projection_view[0][0]);
-		glUniform1f(1, -1.0f);
 		glUniform3fv(3, 1, &light_direction.x);
 
 		for (const auto& i : skinned_transparent_instances) {
