@@ -120,14 +120,12 @@ export class RenderManager {
 		click_helper_instances.push_back(a);
 	}
 
-	void render(const bool render_lighting, const bool render_click_helpers, const glm::vec3 light_direction) {
+	void render(const bool render_lighting, const glm::vec3 light_direction) {
 		GLint old_vao;
 		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &old_vao);
 
-		if (render_click_helpers) {
-			for (const auto& i : click_helper_instances) {
-				queue_render(*click_helper, i, glm::vec3(1.f), 0);
-			}
+		for (const auto& i : click_helper_instances) {
+			queue_render(*click_helper, i, glm::vec3(1.f), 0);
 		}
 
 		for (const auto& i : skinned_meshes) {

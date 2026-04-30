@@ -772,7 +772,7 @@ export class Map: public QObject {
 			brush->render();
 		}
 
-		render_manager.render(render_lighting, render_click_helpers, light_direction);
+		render_manager.render(render_lighting, light_direction);
 		if (render_water) {
 			terrain.render_water();
 		}
