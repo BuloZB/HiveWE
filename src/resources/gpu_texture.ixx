@@ -15,10 +15,20 @@ namespace fs = std::filesystem;
 export class GPUTexture : public Resource {
   public:
 	GLuint id = 0;
+	GLuint64 bindless_handle = 0;
+	bool handle_resident = false; // Singals the render context to set residency as it is per-context
 
 	static constexpr const char* name = "GPUTexture";
 
-	explicit GPUTexture(const fs::path& path) {
+	/// Must be called from the rendering context
+	void make_resident() {
+		if (!handle_resident && bindless_handle != 0) {
+			glMakeTextureHandleResidentARB(bindless_handle);
+			handle_resident = true;
+		}
+	}
+
+	explicit GPUTexture(const fs::path& path, int flags = 0) {
 		fs::path new_path = path;
 
 		BinaryReader reader = [&] {
@@ -77,12 +87,18 @@ export class GPUTexture : public Resource {
 			ScopedTimer t(profile_gl_ns);
 			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_S, (flags & 1) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_T, (flags & 2) ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+
+			// Make resident later on the rendering context
+			bindless_handle = glGetTextureHandleARB(id);
 		}
 	}
 
 	virtual ~GPUTexture() {
+		if (handle_resident) {
+			glMakeTextureHandleNonResidentARB(bindless_handle);
+		}
 		glDeleteTextures(1, &id);
 	}
 };

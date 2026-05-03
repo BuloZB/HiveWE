@@ -58,6 +58,29 @@ export class SkinnedMesh: public Resource {
 	GLuint layer_colors_ssbo;
 	GLuint bones_ssbo;
 	GLuint bones_ssbo_colored;
+	GLuint texture_handles_ssbo = 0;
+	GLuint layer_texture_ids_ssbo = 0;
+	GLuint layer_params_ssbo = 0;
+
+	// Mirrors std430 layout in skinned_mesh_*.frag - 8 * uint = 32 bytes per entry.
+	struct LayerTextureIds {
+		uint32_t albedo; // also serves as SD diffuse
+		uint32_t normal;
+		uint32_t orm;
+		uint32_t emissive;
+		uint32_t team_color;
+		uint32_t environment;
+		uint32_t _pad0;
+		uint32_t _pad1;
+	};
+
+	// Mirrors std430 layout in skinned_mesh_*.frag - 16 bytes per entry.
+	struct LayerParams {
+		float alpha_test;
+		uint32_t layer_lit;
+		uint32_t is_team_color;
+		uint32_t _pad;
+	};
 
 	int skip_count = 0;
 
@@ -307,22 +330,57 @@ export class SkinnedMesh: public Resource {
 
 				if (replaceable_id_override && texture.replaceable_id == replaceable_id_override->first) {
 					textures.push_back(
-						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags)).value()
+						resource_manager.load<GPUTexture>(replaceable_id_override->second + suffix, std::to_string(texture.flags), static_cast<int>(texture.flags)).value()
 					);
 				} else {
 					textures.push_back(resource_manager.load<GPUTexture>(
 						mdx::replaceable_id_to_texture.at(texture.replaceable_id) + suffix,
-						std::to_string(texture.flags)
+						std::to_string(texture.flags),
+						static_cast<int>(texture.flags)
 					).value());
 				}
 			} else {
-				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags)).value());
+				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags), static_cast<int>(texture.flags)).value());
 			}
-			// TODO we should have a unique texture resource for each combination of the below two settings
-			// Or emulate it in the shader?
-			glTextureParameteri(textures.back()->id, GL_TEXTURE_WRAP_S, texture.flags & 1 ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-			glTextureParameteri(textures.back()->id, GL_TEXTURE_WRAP_T, texture.flags & 2 ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 		}
+
+		// Bindless texture mapping buffers
+		std::vector<GLuint64> handles;
+		handles.reserve(textures.size());
+		for (const auto& texture : textures) {
+			handles.push_back(texture->bindless_handle);
+		}
+
+		glCreateBuffers(1, &texture_handles_ssbo);
+		glNamedBufferStorage(texture_handles_ssbo, handles.size() * sizeof(GLuint64), handles.data(), 0);
+
+		std::vector<LayerTextureIds> layer_ids;
+		layer_ids.reserve(skip_count);
+		std::vector<LayerParams> layer_params;
+		layer_params.reserve(skip_count);
+		for (const auto& g : geosets) {
+			for (const auto& layer : mdx->materials[g.material_id].layers) {
+				LayerTextureIds e{};
+				uint32_t* slots = &e.albedo;
+				for (size_t s = 0; s < layer.textures.size() && s < 6; s++) {
+					slots[s] = layer.textures[s].id;
+				}
+				layer_ids.push_back(e);
+
+				LayerParams p{};
+				p.alpha_test = layer.blend_mode == 0 ? 0.01f : layer.blend_mode == 1 ? 0.75f : 0.01f;
+				p.layer_lit = (layer.shading_flags & 0x1) ? 0u : 1u;
+				const uint32_t replaceable_id = mdx->textures[layer.textures[0].id].replaceable_id;
+				p.is_team_color = (replaceable_id == 1 || replaceable_id == 2) ? 1u : 0u;
+				layer_params.push_back(p);
+			}
+		}
+
+		glCreateBuffers(1, &layer_texture_ids_ssbo);
+		glNamedBufferStorage(layer_texture_ids_ssbo, layer_ids.size() * sizeof(LayerTextureIds), layer_ids.data(), 0);
+
+		glCreateBuffers(1, &layer_params_ssbo);
+		glNamedBufferStorage(layer_params_ssbo, layer_params.size() * sizeof(LayerParams), layer_params.data(), 0);
 
 		// Reclaim some space
 		for (auto& i : mdx->geosets) {
@@ -356,6 +414,11 @@ export class SkinnedMesh: public Resource {
 	void setup_vao() {
 		glCreateVertexArrays(1, &vao);
 		glVertexArrayElementBuffer(vao, index_buffer);
+
+		// Bindless handles must be made resident on the rendering context, but they might be loaded on the gl thread pool.
+		for (const auto& tex : textures) {
+			tex->make_resident();
+		}
 	}
 
 	~SkinnedMesh() {
@@ -370,6 +433,9 @@ export class SkinnedMesh: public Resource {
 		glDeleteBuffers(1, &instance_ssbo);
 		glDeleteBuffers(1, &bones_ssbo);
 		glDeleteBuffers(1, &bones_ssbo_colored);
+		glDeleteBuffers(1, &texture_handles_ssbo);
+		glDeleteBuffers(1, &layer_texture_ids_ssbo);
+		glDeleteBuffers(1, &layer_params_ssbo);
 	}
 
 	void upload_render_data() {
@@ -437,6 +503,7 @@ export class SkinnedMesh: public Resource {
 		}
 		glBindVertexArray(vao);
 
+		glUniform1i(2, render_lighting ? 1 : 0);
 		glUniform1i(4, skip_count);
 		glUniform1ui(6, mdx->bones.size());
 		glUniform1i(7, 0); // non-instanced instanceID uniform
@@ -450,6 +517,9 @@ export class SkinnedMesh: public Resource {
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, weight_buffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bones_ssbo);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, instance_team_color_index_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, texture_handles_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, layer_texture_ids_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, layer_params_ssbo);
 
 		int lay_index = 0;
 		for (const auto& i : geosets) {
@@ -466,12 +536,7 @@ export class SkinnedMesh: public Resource {
 					continue;
 				}
 
-				glUniform1f(1, j.blend_mode == 1 ? 0.75f : 0.01f);
-				glUniform1i(2, !(j.shading_flags & 0x1) && render_lighting);
 				glUniform1i(5, lay_index);
-				const bool is_team_color =
-					(mdx->textures[j.textures[0].id].replaceable_id == 1 || mdx->textures[j.textures[0].id].replaceable_id == 2);
-				glUniform1i(10, is_team_color);
 
 				switch (j.blend_mode) {
 					case 0:
@@ -513,10 +578,6 @@ export class SkinnedMesh: public Resource {
 					glDepthMask(true);
 				}
 
-				for (size_t texture_slot = 0; texture_slot < j.textures.size(); texture_slot++) {
-					glBindTextureUnit(texture_slot, textures[j.textures[texture_slot].id]->id);
-				}
-
 				glDrawElementsInstancedBaseVertex(
 					GL_TRIANGLES,
 					i.indices,
@@ -540,6 +601,7 @@ export class SkinnedMesh: public Resource {
 		}
 		glBindVertexArray(vao);
 
+		glUniform1i(2, render_lighting ? 1 : 0);
 		glUniform1i(4, skip_count);
 		glUniform1ui(6, mdx->bones.size());
 		glUniform1i(7, instance_id);
@@ -553,6 +615,9 @@ export class SkinnedMesh: public Resource {
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, weight_buffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bones_ssbo);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, instance_team_color_index_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, texture_handles_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, layer_texture_ids_ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, layer_params_ssbo);
 
 		int layer_index = 0;
 		for (const auto& i : geosets) {
@@ -575,11 +640,7 @@ export class SkinnedMesh: public Resource {
 					continue;
 				}
 
-				glUniform1i(2, !(j.shading_flags & 0x1) && render_lighting);
 				glUniform1i(5, layer_index);
-				const bool is_team_color =
-					(mdx->textures[j.textures[0].id].replaceable_id == 1 || mdx->textures[j.textures[0].id].replaceable_id == 2);
-				glUniform1i(10, is_team_color);
 
 				switch (j.blend_mode) {
 					case 2:
@@ -609,10 +670,6 @@ export class SkinnedMesh: public Resource {
 					glDisable(GL_DEPTH_TEST);
 				} else {
 					glEnable(GL_DEPTH_TEST);
-				}
-
-				for (size_t texture_slot = 0; texture_slot < j.textures.size(); texture_slot++) {
-					glBindTextureUnit(texture_slot, textures[j.textures[texture_slot].id]->id);
 				}
 
 				glDrawElementsBaseVertex(

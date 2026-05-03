@@ -120,14 +120,12 @@ export class RenderManager {
 		click_helper_instances.push_back(a);
 	}
 
-	void render(const bool render_lighting, const bool render_click_helpers, const glm::vec3 light_direction) {
+	void render(const bool render_lighting, const glm::vec3 light_direction) {
 		GLint old_vao;
 		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &old_vao);
 
-		if (render_click_helpers) {
-			for (const auto& i : click_helper_instances) {
-				queue_render(*click_helper, i, glm::vec3(1.f), 0);
-			}
+		for (const auto& i : click_helper_instances) {
+			queue_render(*click_helper, i, glm::vec3(1.f), 0);
 		}
 
 		for (const auto& i : skinned_meshes) {
@@ -162,7 +160,6 @@ export class RenderManager {
 
 		skinned_mesh_shader_sd->use();
 		glUniformMatrix4fv(0, 1, false, &camera.projection_view[0][0]);
-		glUniform1f(1, -1.0f);
 		glUniform3fv(3, 1, &light_direction.x);
 
 		for (const auto& i : skinned_transparent_instances) {
@@ -171,7 +168,6 @@ export class RenderManager {
 
 		skinned_mesh_shader_hd->use();
 		glUniformMatrix4fv(0, 1, false, &camera.projection_view[0][0]);
-		glUniform1f(1, -1.0f);
 		glUniform3fv(3, 1, &light_direction.x);
 
 		for (const auto& i : skinned_transparent_instances) {
