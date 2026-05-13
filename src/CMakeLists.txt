@@ -1,4 +1,4 @@
-target_sources(HiveWE PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
+target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"types.ixx"
 	"map_global.ixx"
 	"globals.ixx"
@@ -98,6 +98,7 @@ target_sources(HiveWE PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 
 	"utilities/no_init_allocator.ixx"
 	"utilities/math_operations.ixx"
+	"utilities/rects.ixx"
 	
 	"test.ixx"
 	"object_editor/ability_list_editor.ixx"
@@ -105,9 +106,11 @@ target_sources(HiveWE PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 
 target_sources(HiveWE PRIVATE
 	"main.cpp"
-
 	"main_window/hivewe.rc"
-	"main_window/hivewe.cpp"	
+)
+
+target_sources(HiveWE_lib PRIVATE
+	"main_window/hivewe.cpp"
 	"main_window/glwidget.cpp"
 	"main_window/main_ribbon.cpp"
 
