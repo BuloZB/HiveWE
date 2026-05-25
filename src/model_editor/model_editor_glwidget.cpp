@@ -50,9 +50,11 @@ void ModelEditorGLWidget::initializeGL() {
 
 	mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
 	skeleton = SkeletalModelInstance(mdx);
+	SkeletalModelInstance::pick_preview_sequence(skeleton, *mdx);
 	recenter_camera();
 
-	shader = resource_manager.load<Shader>({ "data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag" }).value();
+	shader_sd = resource_manager.load<Shader>({ "data/shaders/editable_mesh_sd.vert", "data/shaders/editable_mesh_sd.frag" }).value();
+	shader_hd = resource_manager.load<Shader>({ "data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag" }).value();
 }
 
 void ModelEditorGLWidget::resizeGL(const int w, const int h) {
@@ -79,8 +81,28 @@ void ModelEditorGLWidget::paintGL() {
 	glClearColor(0.3f, 0.3f, 0.3f, 1.f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	shader->use();
-	mesh->render(0, skeleton, camera.projection_view, camera.direction);
+	// Opaque passes — depth test/write on, blend off (state restored per-layer inside render_opaque)
+	glEnable(GL_BLEND);
+	glDepthMask(true);
+	glEnable(GL_DEPTH_TEST);
+
+	shader_sd->use();
+	mesh->render_opaque(false, 0, skeleton, camera.projection_view, camera.direction);
+	shader_hd->use();
+	mesh->render_opaque(true, 0, skeleton, camera.projection_view, camera.direction);
+
+	// Transparent passes — depth write off; depth test/blend func driven per-layer inside render_transparent
+	glEnable(GL_BLEND);
+	glDepthMask(false);
+
+	shader_sd->use();
+	mesh->render_transparent(false, 0, skeleton, camera.projection_view, camera.direction);
+	shader_hd->use();
+	mesh->render_transparent(true, 0, skeleton, camera.projection_view, camera.direction);
+
+	glDepthMask(true);
+
+	mesh->render_particles(skeleton, camera.projection_view, camera.X, camera.Y, camera.direction);
 
 	glEnable(GL_BLEND);
 
@@ -129,6 +151,7 @@ void ModelEditorGLWidget::paintGL() {
 			const auto mdx = std::make_shared<mdx::MDX>(reader);
 			mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
 			skeleton = SkeletalModelInstance(mdx);
+			SkeletalModelInstance::pick_preview_sequence(skeleton, *mdx);
 			recenter_camera();
 		}
 
@@ -143,6 +166,9 @@ void ModelEditorGLWidget::paintGL() {
 
 		ImGui::Text(std::format("Vertices: {}", vertices).c_str());
 		ImGui::Text(std::format("Triangles: {}", triangles).c_str());
+
+		const auto& e = mesh->mdx->extent;
+		ImGui::Text(std::format("Extents:\n\tmin: x {} y {} z {}\n\tmax: x {} y {} z {}", e.minimum.x, e.minimum.y, e.minimum.z, e.maximum.x, e.maximum.y, e.maximum.z).c_str());
 	}
 	ImGui::End();
 

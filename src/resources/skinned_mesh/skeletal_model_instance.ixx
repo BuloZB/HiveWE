@@ -11,6 +11,7 @@ import Utilities;
 import MathOperations;
 import RenderNode;
 import MDX;
+import ParticleEmitter2Simulation;
 import <glm/glm.hpp>;
 import <glm/gtc/matrix_transform.hpp>;
 import <glm/gtc/quaternion.hpp>;
@@ -28,11 +29,57 @@ struct CurrentKeyFrame {
 	int right = 0;
 };
 
+// Recognized tokens for sequence selection. Names with substrings not in this set are ignored
+// when tokenizing a sequence name; the request side substitutes "stand" for unrecognized substrings.
+static constexpr std::array<std::string_view, 64> sequence_tokens = {
+	"alternate",   "alternateex", "attack",  "berserk", "birth",     "chain",   "channel", "cinematic",
+	"complete",    "critical",    "death",   "decay",   "defend",    "dissipate", "drain", "eattree",
+	"entangle",    "fast",        "fifth",   "fill",    "fire",      "first",   "five",    "flail",
+	"flesh",       "four",        "fourth",  "gold",    "hit",       "large",   "left",    "light",
+	"looping",     "lumber",      "medium",  "moderate", "morph",    "off",     "one",     "portrait",
+	"puke",        "ready",       "right",   "second",  "severe",    "sleep",   "slam",    "small",
+	"spiked",      "spell",       "spin",    "stand",   "swim",      "talk",    "third",   "three",
+	"throw",       "two",         "turn",    "upgrade", "victory",   "walk",    "work",    "wounded",
+};
+
+static bool is_recognized_sequence_token(const std::string_view token) {
+	return std::ranges::find(sequence_tokens, token) != sequence_tokens.end();
+}
+
+// Splits `name` on whitespace (lowercased). Unrecognized substrings are dropped, or replaced by "stand"
+// when `replace_unrecognized` is true (used for the request side, per the selection spec).
+static std::vector<std::string> tokenize_sequence_name(const std::string_view name, const bool replace_unrecognized) {
+	std::vector<std::string> tokens;
+	size_t i = 0;
+	while (i < name.size()) {
+		while (i < name.size() && std::isspace(static_cast<unsigned char>(name[i]))) {
+			i++;
+		}
+		const size_t start = i;
+		while (i < name.size() && !std::isspace(static_cast<unsigned char>(name[i]))) {
+			i++;
+		}
+		if (start == i) {
+			break;
+		}
+		std::string token(name.substr(start, i - start));
+		std::ranges::transform(token, token.begin(), [](unsigned char c) { return std::tolower(c); });
+		if (is_recognized_sequence_token(token)) {
+			tokens.push_back(std::move(token));
+		} else if (replace_unrecognized) {
+			tokens.emplace_back("stand");
+		}
+	}
+	return tokens;
+}
+
 export class SkeletalModelInstance {
   public:
 	std::shared_ptr<mdx::MDX> model;
 
+	// Todo, with validate() we ensure all MDXs have at least one sequence, so this could be a size_t
 	int sequence_index = 0; // can be -1 if not animating
+	// Todo can this be negative?
 	int current_frame = 0;
 
 	glm::mat4 matrix = glm::mat4(1.f);
@@ -41,22 +88,19 @@ export class SkeletalModelInstance {
 	std::vector<RenderNode> render_nodes;
 	std::vector<glm::mat4> world_matrices;
 
-	// Used in set_sequence(string)
+	ParticleEmitter2Simulation particles;
+	bool sequence_just_started = true;
+
 	std::vector<std::string> required_animation_names;
 
 	SkeletalModelInstance() = default;
-	explicit SkeletalModelInstance(const std::shared_ptr<mdx::MDX>& model, std::vector<std::string> &&required_animation_names = {})
-		: model(model), required_animation_names(required_animation_names) {
-		const size_t node_count = model->bones.size() +
-							model->lights.size() +
-							model->help_bones.size() +
-							model->attachments.size() +
-							model->emitters1.size() +
-							model->emitters2.size() +
-							model->ribbons.size() +
-							model->event_objects.size() +
-							model->collision_shapes.size() +
-							model->corn_emitters.size();
+
+	explicit SkeletalModelInstance(const std::shared_ptr<mdx::MDX>& model, std::vector<std::string>&& required_animation_names = {}) :
+		model(model),
+		required_animation_names(required_animation_names) {
+		const size_t node_count = model->bones.size() + model->lights.size() + model->help_bones.size() + model->attachments.size()
+			+ model->emitters1.size() + model->emitters2.size() + model->ribbons.size() + model->event_objects.size()
+			+ model->collision_shapes.size() + model->corn_emitters.size();
 
 		// ToDo: for each camera: add camera source node to renderNodes
 		render_nodes.resize(node_count);
@@ -72,6 +116,8 @@ export class SkeletalModelInstance {
 		});
 
 		current_keyframes.resize(model->unique_tracks);
+
+		particles.init(*model);
 
 		set_sequence("stand");
 	}
@@ -92,14 +138,18 @@ export class SkeletalModelInstance {
 
 		// Advance current frame
 		const mdx::Sequence& sequence = model->sequences[sequence_index];
+		const int frame_before_advance = current_frame;
 		//if (sequence.flags & mdx::Sequence::non_looping) {
 		//	current_frame = std::min<int>(current_frame + delta * 1000.0, sequence.end_frame);
 		//} else {
-			current_frame += delta * 1000.0;
-			if (current_frame > sequence.end_frame) {
-				current_frame = sequence.start_frame;
-			}
+		current_frame += delta * 1000.0;
+		if (current_frame > sequence.end_frame) {
+			current_frame = sequence.start_frame;
+		}
 		//}
+
+		const bool sequence_wrapped = sequence_just_started || (current_frame < frame_before_advance);
+		sequence_just_started = false;
 
 		for (const auto& i : render_nodes) {
 			advance_keyframes(i.node->KGTR);
@@ -119,10 +169,48 @@ export class SkeletalModelInstance {
 			}
 		}
 
+		for (const auto& i : model->emitters2) {
+			advance_keyframes(i.KP2S);
+			advance_keyframes(i.KP2R);
+			advance_keyframes(i.KP2L);
+			advance_keyframes(i.KP2G);
+			advance_keyframes(i.KP2E);
+			advance_keyframes(i.KP2N);
+			advance_keyframes(i.KP2W);
+			advance_keyframes(i.KP2V);
+		}
+
 		update_nodes();
+		update_particle_emitters2(delta, sequence_wrapped);
 	}
 
-void update_nodes() {
+	void update_particle_emitters2(const double delta, const bool sequence_wrapped) {
+		for (size_t i = 0; i < model->emitters2.size(); ++i) {
+			const mdx::ParticleEmitter2& e = model->emitters2[i];
+			if (e.node.id == -1) {
+				continue;
+			}
+
+			ParticleEmitter2Simulation::EmitterFrameParams p {};
+			p.emission_rate = interpolate_keyframes(e.KP2E, e.emission_rate);
+			p.speed = interpolate_keyframes(e.KP2S, e.speed);
+			p.variation = interpolate_keyframes(e.KP2R, e.variation);
+			p.latitude = glm::radians(interpolate_keyframes(e.KP2L, e.latitude));
+			p.gravity = interpolate_keyframes(e.KP2G, e.gravity);
+			p.width = interpolate_keyframes(e.KP2W, e.width);
+			p.length = interpolate_keyframes(e.KP2N, e.length);
+			p.visibility = interpolate_keyframes(e.KP2V, 1.0f);
+			// world_matrices[node.id] is built in skinning convention (no pivot offset
+			// when the node is at rest), so append the pivot translation to recover
+			// the emitter's actual world position.
+			p.world_matrix = world_matrices[e.node.id] * glm::translate(glm::mat4(1.f), model->pivots[e.node.id]);
+			p.sequence_just_wrapped = sequence_wrapped;
+
+			particles.update_emitter(i, delta, e, p);
+		}
+	}
+
+	void update_nodes() {
 		assert(sequence_index >= 0 && sequence_index < model->sequences.size());
 
 		const glm::mat3 inverse_model_rotation = glm::transpose(
@@ -176,6 +264,7 @@ void update_nodes() {
 	void set_sequence(const int sequence_index) {
 		this->sequence_index = sequence_index;
 		current_frame = model->sequences[sequence_index].start_frame;
+		sequence_just_started = true;
 
 		for (const auto& i : render_nodes) {
 			calculate_sequence_extents(i.node->KGTR);
@@ -194,39 +283,199 @@ void update_nodes() {
 				// Add more when required
 			}
 		}
+
+		for (const auto& i : model->emitters2) {
+			calculate_sequence_extents(i.KP2S);
+			calculate_sequence_extents(i.KP2R);
+			calculate_sequence_extents(i.KP2L);
+			calculate_sequence_extents(i.KP2G);
+			calculate_sequence_extents(i.KP2E);
+			calculate_sequence_extents(i.KP2N);
+			calculate_sequence_extents(i.KP2W);
+			calculate_sequence_extents(i.KP2V);
+		}
 	}
 
-	/// Set sequence by name according to required animation names
-	/// Currently only used to set a stand animation
-	/// NOTE: This is not proper behaviour (as documented under https://lep.nrw/jassbot/doc/SetUnitAnimation)
-	///       Current behaviour will use the first animation matching all names, if any, starting with sequence_name
-	///       thus we will not get the idle animations cycling
-	void set_sequence(const std::string& sequence_name) {
-		std::string lowercase_sequence_name = sequence_name;
-		const auto& sequences = model->sequences;
-		to_lowercase(lowercase_sequence_name);
-		for (size_t i = 0; i < sequences.size(); i++) {
-			std::string anim_name = to_lowercase_copy(sequences[i].name);
+	// True if `name` contains at least one WC3-recognized animation token. Lets callers filter
+	// out sequences like "nothing" that the set_sequence tiebreaker may otherwise pick over a
+	// recognized-but-mismatched name (e.g. "Birth" when asking for "stand").
+	static bool sequence_name_has_recognized_token(const std::string_view name) {
+		return !tokenize_sequence_name(name, false).empty();
+	}
 
-			if (!anim_name.starts_with(lowercase_sequence_name)) {
-				continue;
-			}
+	// True if the sequence has the uninitialized-extent sentinel (BoundRadius == 0, min/max swapped
+	// to +/-FLT_MAX). Spell models like FlameStrike ship empty "stand"/"death" placeholders that
+	// match by name but have no animated content — previews should fall back to "birth".
+	static bool sequence_has_empty_extent(const mdx::Sequence& sequence) {
+		return sequence.extent.bounds_radius == 0.f
+		    && sequence.extent.minimum.x > sequence.extent.maximum.x;
+	}
 
-			bool valid = true;
-			for (auto& req_anim_name : required_animation_names) {
-				if (!anim_name.contains(req_anim_name)) {
-					valid = false;
-					break;
-				}
+	// Adjust the skeleton's current sequence to one suited for a static/looping preview. The
+	// constructor's `set_sequence("stand")` works for unit models but for spell effects with no
+	// "stand" sequence its random tiebreaker can land on a "death" sequence whose Visibility
+	// track holds the emitters at 0 which is an empty thumbnail. We want to keep a suitable stand and
+	// otherwise prefer a Birth-named sequence, otherwise any suitable sequence, otherwise leave it.
+	static void pick_preview_sequence(SkeletalModelInstance& skeleton, const mdx::MDX& mdx) {
+		auto suitable = [&](size_t i) {
+			const auto& s = mdx.sequences[i];
+			return sequence_name_has_recognized_token(s.name) && !sequence_has_empty_extent(s);
+		};
+		auto lower_name = [](const mdx::Sequence& s) {
+			std::string out = s.name;
+			std::ranges::transform(out, out.begin(), [](unsigned char c) { return std::tolower(c); });
+			return out;
+		};
+
+		const int current = skeleton.sequence_index;
+		const bool current_valid = current >= 0 && current < static_cast<int>(mdx.sequences.size());
+
+		if (current_valid && suitable(current) && lower_name(mdx.sequences[current]).contains("stand")) {
+			return;
+		}
+
+		for (size_t i = 0; i < mdx.sequences.size(); ++i) {
+			if (suitable(i) && lower_name(mdx.sequences[i]).contains("birth")) {
+				skeleton.set_sequence(static_cast<int>(i));
+				return;
 			}
-			if (valid) {
-				set_sequence(static_cast<int>(i));
-				break;
+		}
+
+		if (current_valid && suitable(current)) {
+			return;
+		}
+
+		for (size_t i = 0; i < mdx.sequences.size(); ++i) {
+			if (suitable(i)) {
+				skeleton.set_sequence(static_cast<int>(i));
+				return;
 			}
 		}
 	}
-	
-	template <typename T>
+
+	/// Set sequence by name, matching the WC3 (Reforged) token-based selection rules.
+	///
+	/// The request is split into whitespace-delimited substrings; unrecognized substrings are
+	/// replaced by "stand". Each animation in the model is tokenized the same way, but
+	/// unrecognized substrings are dropped. For every candidate we count tokens that match the
+	/// request (order-insensitive) and tokens that do not. The best match is the animation with
+	/// the most matches; ties are broken by fewest non-matches. Among remaining ties one is
+	/// picked at random, weighted by the per-sequence Rarity (uniform when all rarities are 0).
+	///
+	/// Special case: if the request has at least two recognized tokens and the first is
+	/// "cinematic", we first try an exact full-string (case-insensitive) name match before
+	/// falling back to the standard tokenized selection.
+	void set_sequence(const std::string& sequence_name) {
+		const auto& sequences = model->sequences;
+		if (sequences.empty()) {
+			return;
+		}
+
+		// Cinematic special-case: arg with 2+ recognized tokens whose first recognized token is
+		// "cinematic" attempts a full-string match before falling back to tokenized selection.
+		const auto recognized_request = tokenize_sequence_name(sequence_name, false);
+		if (recognized_request.size() >= 2 && recognized_request.front() == "cinematic") {
+			const std::string lower_request = to_lowercase_copy(sequence_name);
+			for (size_t i = 0; i < sequences.size(); i++) {
+				if (to_lowercase_copy(sequences[i].name) == lower_request) {
+					set_sequence(static_cast<int>(i));
+					return;
+				}
+			}
+		}
+
+		std::vector<std::string> request_tokens = tokenize_sequence_name(sequence_name, true);
+		if (request_tokens.empty()) {
+			request_tokens.emplace_back("stand");
+		}
+
+		struct Candidate {
+			int index;
+			int matches;
+			int mismatches;
+			float rarity;
+		};
+		std::vector<Candidate> candidates;
+		candidates.reserve(sequences.size());
+
+		for (size_t i = 0; i < sequences.size(); i++) {
+			const std::string lower_name = to_lowercase_copy(sequences[i].name);
+
+			bool meets_required = true;
+			for (const auto& req : required_animation_names) {
+				if (!lower_name.contains(req)) {
+					meets_required = false;
+					break;
+				}
+			}
+			if (!meets_required) {
+				continue;
+			}
+
+			const auto anim_tokens = tokenize_sequence_name(lower_name, false);
+
+			int matches = 0;
+			int mismatches = 0;
+			for (const auto& tok : anim_tokens) {
+				if (std::ranges::find(request_tokens, tok) != request_tokens.end()) {
+					matches++;
+				} else {
+					mismatches++;
+				}
+			}
+
+			candidates.push_back({static_cast<int>(i), matches, mismatches, sequences[i].rarity});
+		}
+
+		if (candidates.empty()) {
+			return;
+		}
+
+		int best_matches = -1;
+		int best_mismatches = std::numeric_limits<int>::max();
+		for (const auto& c : candidates) {
+			if (c.matches > best_matches || (c.matches == best_matches && c.mismatches < best_mismatches)) {
+				best_matches = c.matches;
+				best_mismatches = c.mismatches;
+			}
+		}
+
+		std::vector<Candidate> winners;
+		for (const auto& c : candidates) {
+			if (c.matches == best_matches && c.mismatches == best_mismatches) {
+				winners.push_back(c);
+			}
+		}
+
+		int chosen = winners.front().index;
+		if (winners.size() > 1) {
+			static thread_local std::mt19937 rng{std::random_device{}()};
+
+			float total_weight = 0.f;
+			for (const auto& w : winners) {
+				total_weight += w.rarity;
+			}
+
+			if (total_weight > 0.f) {
+				std::uniform_real_distribution<float> dist(0.f, total_weight);
+				float roll = dist(rng);
+				for (const auto& w : winners) {
+					roll -= w.rarity;
+					if (roll <= 0.f) {
+						chosen = w.index;
+						break;
+					}
+				}
+			} else {
+				std::uniform_int_distribution<size_t> dist(0, winners.size() - 1);
+				chosen = winners[dist(rng)].index;
+			}
+		}
+
+		set_sequence(chosen);
+	}
+
+	template<typename T>
 	void calculate_sequence_extents(const mdx::TrackHeader<T>& header) {
 		if (header.id == -1) {
 			return;
@@ -272,8 +521,7 @@ void update_nodes() {
 		}
 	}
 
-
-	template <typename T>
+	template<typename T>
 	void advance_keyframes(const mdx::TrackHeader<T>& header) {
 		if (header.id == -1) {
 			return;
@@ -287,7 +535,9 @@ void update_nodes() {
 			if (local_sequence_end == 0) {
 				local_current_frame = 0;
 			} else {
-				local_current_frame = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() % local_sequence_end;
+				local_current_frame =
+					std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
+					% local_sequence_end;
 			}
 		}
 
@@ -349,7 +599,7 @@ void update_nodes() {
 		return interpolate_keyframes(layer.KMTA, layer.alpha);
 	}
 
-	template <typename T>
+	template<typename T>
 	T interpolate_keyframes(const mdx::TrackHeader<T>& header, const T& default_value) const {
 		if (header.id == -1) {
 			return default_value;
@@ -368,7 +618,9 @@ void update_nodes() {
 			if (local_sequence_end == 0) {
 				local_current_frame = 0;
 			} else {
-				local_current_frame = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() % local_sequence_end;
+				local_current_frame =
+					std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
+					% local_sequence_end;
 			}
 		}
 

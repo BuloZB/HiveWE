@@ -87,7 +87,8 @@ void ModelGridGLWidget::initializeGL() {
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	shader = resource_manager.load<Shader>({"data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag"}).value();
+	shader_sd = resource_manager.load<Shader>({"data/shaders/editable_mesh_sd.vert", "data/shaders/editable_mesh_sd.frag"}).value();
+	shader_hd = resource_manager.load<Shader>({"data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag"}).value();
 
 	elapsed_timer.start();
 }
@@ -121,8 +122,8 @@ void ModelGridGLWidget::paintGL() {
 
 	glBindVertexArray(vao);
 	glEnable(GL_DEPTH_TEST);
-	shader->use();
 	glEnable(GL_SCISSOR_TEST);
+	glDepthFunc(GL_LEQUAL);
 
 	const int view_top = scroll_offset_y;
 	const int view_bottom = scroll_offset_y + height();
@@ -167,7 +168,28 @@ void ModelGridGLWidget::paintGL() {
 			const glm::mat4 proj = glm::perspective(glm::radians(k_fov_deg), 1.f, k_near, k_far);
 			const glm::mat4 pv = proj * view;
 
-			cell.mesh->render(0, cell.skeleton, pv, dir);
+			glEnable(GL_BLEND);
+			glDepthMask(true);
+			glEnable(GL_DEPTH_TEST);
+
+			shader_sd->use();
+			cell.mesh->render_opaque(false, 1, cell.skeleton, pv, dir);
+			shader_hd->use();
+			cell.mesh->render_opaque(true, 1, cell.skeleton, pv, dir);
+
+			glEnable(GL_BLEND);
+			glDepthMask(false);
+
+			shader_sd->use();
+			cell.mesh->render_transparent(false, 1, cell.skeleton, pv, dir);
+			shader_hd->use();
+			cell.mesh->render_transparent(true, 1, cell.skeleton, pv, dir);
+
+			glDepthMask(true);
+
+			const glm::vec3 camera_right = glm::normalize(glm::cross(dir, up));
+			const glm::vec3 camera_up = glm::normalize(glm::cross(camera_right, dir));
+			cell.mesh->render_particles(cell.skeleton, pv, camera_right, camera_up, dir);
 		}
 	}
 
@@ -279,13 +301,15 @@ void ModelGridGLWidget::load_cell(PreviewCell& cell) {
 		cell.mesh = std::make_shared<EditableMesh>(cell.mdx, std::nullopt);
 		cell.skeleton = SkeletalModelInstance(cell.mdx);
 
+		SkeletalModelInstance::pick_preview_sequence(cell.skeleton, *cell.mdx);
+
 		if (cell.mdx->sequences.empty() || cell.skeleton.sequence_index < 0) {
 			cell.fit_distance = 200.f;
 			cell.fit_position = glm::vec3(0.f);
 		} else {
 			const auto& extent = cell.mdx->sequences[cell.skeleton.sequence_index].extent;
 			const glm::vec3 size = extent.maximum - extent.minimum;
-			const float radius = glm::length(size) * 0.5f * 1.1f;
+			const float radius = glm::length(size) * 0.5f;
 			const float fov_rad = glm::radians(k_fov_deg);
 			cell.fit_distance = radius / std::sin(fov_rad * 0.5f);
 			cell.fit_position = glm::vec3(0.f, 0.f, extent.minimum.z + size.z * 0.5f);

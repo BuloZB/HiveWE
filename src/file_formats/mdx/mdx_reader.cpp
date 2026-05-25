@@ -95,7 +95,7 @@ namespace mdx {
 		// These older versions encoded HD materials by having a layer for each PBR material
 		// We combine these into the new format
 		if (is_hd) {
-			Layer layer;
+			Layer layer{};
 			layer.hd = is_hd;
 
 			for (size_t i = 0; i < layers_count; i++) {
@@ -153,7 +153,7 @@ namespace mdx {
 			for (size_t i = 0; i < layers_count; i++) {
 				const size_t reader_pos = reader.position;
 				const uint32_t size = reader.read<uint32_t>();
-				Layer layer;
+				Layer layer{};
 				layer.hd = is_hd;
 				layer.blend_mode = reader.read<uint32_t>();
 				layer.shading_flags = reader.read<uint32_t>();
@@ -202,7 +202,7 @@ namespace mdx {
 		const uint32_t layers_count = reader.read<uint32_t>();
 		for (size_t i = 0; i < layers_count; i++) {
 			const size_t reader_pos = reader.position;
-			Layer layer;
+			Layer layer{};
 			const uint32_t size = reader.read<uint32_t>();
 			layer.blend_mode = reader.read<uint32_t>();
 			layer.shading_flags = reader.read<uint32_t>();
@@ -450,7 +450,7 @@ namespace mdx {
 			emitter.gravity = reader.read<float>();
 			emitter.longitude = reader.read<float>();
 			emitter.latitude = reader.read<float>();
-			emitter.path = reader.read_string(256);
+			emitter.path = reader.read_string(260);
 			emitter.reserved = reader.read<uint32_t>();
 			emitter.life_span = reader.read<float>();
 			emitter.speed = reader.read<float>();
@@ -659,10 +659,30 @@ namespace mdx {
 		const uint32_t size = reader.read<uint32_t>();
 
 		while (reader.position < reader_pos + size) {
-			Camera camera;
+			const size_t entry_start = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
 
-			camera.data = reader.read_vector<uint8_t>(inclusive_size - 4);
+			Camera camera;
+			camera.name = reader.read_string(80);
+			camera.position = reader.read<glm::vec3>();
+			camera.field_of_view = reader.read<float>();
+			camera.far_clip = reader.read<float>();
+			camera.near_clip = reader.read<float>();
+			camera.target_position = reader.read<glm::vec3>();
+
+			while (reader.position < entry_start + inclusive_size) {
+				TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
+				if (tag == TrackTag::KCTR) {
+					camera.KCTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KCRL) {
+					camera.KCRL = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KTTR) {
+					camera.KTTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+				} else {
+					std::print("Unknown track tag {}\n", static_cast<uint32_t>(tag));
+				}
+			}
+
 			mdx.cameras.push_back(std::move(camera));
 		}
 	}
@@ -677,10 +697,23 @@ namespace mdx {
 		const uint32_t size = reader.read<uint32_t>();
 
 		while (reader.position < reader_pos + size) {
-			TextureAnimation animation;
+			const size_t entry_start = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
 
-			animation.data = reader.read_vector<uint8_t>(inclusive_size - 4);
+			TextureAnimation animation;
+			while (reader.position < entry_start + inclusive_size) {
+				TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
+				if (tag == TrackTag::KTAT) {
+					animation.KTAT = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KTAR) {
+					animation.KTAR = TrackHeader<glm::quat>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KTAS) {
+					animation.KTAS = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+				} else {
+					std::print("Unknown track tag {}\n", static_cast<uint32_t>(tag));
+				}
+			}
+
 			mdx.texture_animations.push_back(std::move(animation));
 		}
 	}
