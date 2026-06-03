@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <memory>
+#include <vector>
 #include <QElapsedTimer>
 #define QT_NO_OPENGL
 #include <QObject>
@@ -24,7 +25,7 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	double delta = 0.0;
 
 	ModelEditorGLWidget() = delete;
-	explicit ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> model);
+	explicit ModelEditorGLWidget(QWidget* parent, const std::shared_ptr<mdx::MDX>& model, std::vector<mdx::ValidationMessage> messages = {});
 	~ModelEditorGLWidget() = default;
 
 	void initializeGL() override;
@@ -39,10 +40,18 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	void wheelEvent(QWheelEvent* event) override;
 
 	std::shared_ptr<mdx::MDX> mdx;
+	std::vector<mdx::ValidationMessage> messages;
 	std::shared_ptr<EditableMesh> mesh;
 	SkeletalModelInstance skeleton;
 	std::shared_ptr<Shader> shader_sd;
 	std::shared_ptr<Shader> shader_hd;
+
+	// For extent drawing
+	std::shared_ptr<Shader> line_shader;
+	GLuint line_vao = 0;
+	GLuint line_vbo = 0;
+	bool draw_extents_box = false;
+	bool draw_extents_sphere = false;
 
 	int64_t optimization_file_size_reduction = 0;
 	float optimization_file_size_reduction_percent = 0.f;
@@ -51,4 +60,5 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	ModelEditorCamera camera;
 
 	void recenter_camera();
+	void render_extents();
 };
