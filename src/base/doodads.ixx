@@ -15,7 +15,7 @@ import BinaryWriter;
 import Hierarchy;
 import ResourceManager;
 import SkinnedMesh;
-import SkeletalModelInstance;
+import Skeleton;
 import PathingTexture;
 import Utilities;
 import Globals;
@@ -163,6 +163,20 @@ export class Doodads {
 		hierarchy.map_file_write("war3map.doo", writer.buffer);
 	}
 
+	/// Writes a war3map.doo without any doodads to the current map directory.
+	/// Static because it is used to generate the files of a newly created map before any map is loaded
+	static void save_empty() {
+		BinaryWriter writer;
+		writer.write_string("W3do");
+		writer.write<uint32_t>(write_version);
+		writer.write<uint32_t>(write_subversion);
+		writer.write<uint32_t>(0); // No doodads
+		writer.write<uint32_t>(write_special_version);
+		writer.write<uint32_t>(0); // No special doodads
+
+		hierarchy.map_file_write("war3map.doo", writer.buffer);
+	}
+
 	void create(Terrain& terrain, PathingMap& pathing_map) {
 		ZoneScoped("Creating Doodads");
 		// Phase 1: Pre-load unique meshes to avoid thread pool starvation.
@@ -243,7 +257,7 @@ export class Doodads {
 		doodad.scale = {1, 1, 1};
 		doodad.angle = 0;
 		doodad.creation_number = ++Doodad::auto_increment;
-		doodad.skeleton = SkeletalModelInstance(doodad.mesh->mdx);
+		doodad.skeleton = Skeleton(doodad.mesh->mdx);
 
 		const bool is_doodad = doodads_slk.row_headers.contains(id);
 		const slk::SLK& slk = is_doodad ? doodads_slk : destructibles_slk;
@@ -391,7 +405,7 @@ export class Doodads {
 			for (auto& i : doodads) {
 				if (i.id == id) {
 					i.mesh = get_mesh(id, i.variation);
-					i.skeleton = SkeletalModelInstance(i.mesh->mdx);
+					i.skeleton = Skeleton(i.mesh->mdx);
 					i.update(terrain);
 				}
 			}
@@ -433,7 +447,7 @@ export class Doodads {
 			for (auto& i : doodads) {
 				if (i.id == id) {
 					i.mesh = get_mesh(id, i.variation);
-					i.skeleton = SkeletalModelInstance(i.mesh->mdx);
+					i.skeleton = Skeleton(i.mesh->mdx);
 					i.update(terrain);
 					i.skeleton.update(0.016f);
 				}

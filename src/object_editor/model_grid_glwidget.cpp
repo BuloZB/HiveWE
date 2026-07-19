@@ -172,22 +172,21 @@ void ModelGridGLWidget::paintGL() {
 			const glm::mat4 projection_view = projection * view;
 
 			glEnable(GL_BLEND);
-			glDepthMask(true);
-			glEnable(GL_DEPTH_TEST);
 
 			shader_sd->use();
 			cell.mesh->render_opaque(false, 1, cell.skeleton, projection_view, dir);
 			shader_hd->use();
 			cell.mesh->render_opaque(true, 1, cell.skeleton, projection_view, dir);
 
+			// Opaque sets depth mask itself, transparent always off
 			glDepthMask(false);
 
 			shader_sd->use();
 			cell.mesh->render_transparent(false, 1, cell.skeleton, projection_view, dir);
 			shader_hd->use();
 			cell.mesh->render_transparent(true, 1, cell.skeleton, projection_view, dir);
-
-			glDepthMask(true);
+			
+			glEnable(GL_DEPTH_TEST);
 
 			const glm::vec3 camera_right = glm::normalize(glm::cross(dir, up));
 			const glm::vec3 camera_up = glm::normalize(glm::cross(camera_right, dir));
@@ -228,12 +227,7 @@ void ModelGridGLWidget::paintGL() {
 				continue;
 			}
 
-			const auto rect = QRect {
-				c * cell_size,
-				row_y_screen,
-				cell_size,
-				cell_size
-			};
+			const auto rect = QRect {c * cell_size, row_y_screen, cell_size, cell_size};
 
 			painter.setPen(warning_text_color);
 			painter.drawText(rect, Qt::AlignCenter, "Error");
@@ -375,21 +369,15 @@ void ModelGridGLWidget::load_cell(PreviewCell& cell) const {
 		}
 
 		cell.mesh = std::make_shared<EditableMesh>(cell.mdx, std::nullopt);
-		cell.skeleton = SkeletalModelInstance(cell.mdx);
+		cell.skeleton = Skeleton(cell.mdx);
 
-		SkeletalModelInstance::pick_preview_sequence(cell.skeleton, *cell.mdx);
+		Skeleton::pick_preview_sequence(cell.skeleton, *cell.mdx);
 
-		if (cell.mdx->sequences.empty() || cell.skeleton.sequence_index < 0) {
-			cell.fit_distance = 200.f;
-			cell.fit_position = glm::vec3(0.f);
-		} else {
-			const auto& extent = cell.mdx->sequences[cell.skeleton.sequence_index].extent;
-			const glm::vec3 size = extent.maximum - extent.minimum;
-			const float radius = glm::length(size) * 0.5f;
-			const float fov_rad = glm::radians(k_fov_deg);
-			cell.fit_distance = radius / std::sin(fov_rad * 0.5f);
-			cell.fit_position = glm::vec3(0.f, 0.f, extent.minimum.z + size.z * 0.5f);
-		}
+		const auto& extent =
+			cell.skeleton.sequence_index == -1 ? cell.mdx->extent : cell.mdx->sequences[cell.skeleton.sequence_index].extent;
+		const glm::vec3 size = extent.maximum - extent.minimum;
+		cell.fit_position = glm::vec3(0.f, 0.f, extent.minimum.z + size.z * 0.5f);
+		cell.fit_distance = glm::length(size) * 0.5f / std::sin(glm::radians(k_fov_deg) * 0.5f);
 		cell.loaded = true;
 	} catch (std::exception& e) {
 		cell.load_failed = true;

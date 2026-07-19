@@ -13,6 +13,7 @@ import BinaryReader;
 import GameCameras;
 import Imports;
 import MapInfo;
+import Tileset;
 import Doodad;
 import Sounds;
 import Regions;
@@ -37,6 +38,7 @@ import GameplayConstants;
 import Utilities;
 import UnorderedMap;
 import "brush.h";
+import "region_brush.h";
 import <glad/glad.h>;
 import <bullet/btBulletDynamicsCommon.h>;
 import <glm/glm.hpp>;
@@ -46,7 +48,8 @@ namespace fs = std::filesystem;
 using namespace std::literals::string_literals;
 
 export struct FileUsage {
-	std::string path;
+	std::string path; // original on-disk relative path (forward slashes, original case)
+	u64 size = 0;
 	std::unordered_set<std::string> used_by; // empty = unused
 };
 
@@ -55,6 +58,8 @@ export class Map: public QObject {
 
   public:
 	bool loaded = false;
+	/// The map was newly created and has not been resaved yet
+	bool is_in_temp_dir = false;
 
 	TriggerStrings trigger_strings;
 	Triggers triggers;
@@ -69,6 +74,7 @@ export class Map: public QObject {
 	Sounds sounds;
 	GameplayConstants gameplay_constants;
 	ShadowMap shadow_map;
+	TilesetData tilesets;
 	WorldUndoManager world_undo;
 	Brush* brush = nullptr;
 	Physics physics;
@@ -78,6 +84,7 @@ export class Map: public QObject {
 	bool render_doodads = true;
 	bool render_units = true;
 	bool render_pathing = false;
+	bool render_regions = false;
 	bool render_brush = true;
 	bool render_lighting = true;
 	bool render_water = true;
@@ -327,13 +334,23 @@ export class Map: public QObject {
 			buff_slk.merge(campaign_ability_strings_ini, buff_meta_slk);
 		});
 
-		units_future.get();
-		abilities_future.get();
-		items_future.get();
-		doodads_future.get();
-		destructibles_future.get();
-		upgrade_future.get();
-		buff_future.get();
+		try {
+			units_future.get();
+			abilities_future.get();
+			items_future.get();
+			doodads_future.get();
+			destructibles_future.get();
+			upgrade_future.get();
+			buff_future.get();
+		} catch (const std::exception& e) {
+			std::println("Error loading game data: {}", e.what());
+			QMessageBox::critical(
+				nullptr,
+				"Map loading error",
+				QString::fromStdString(std::format("Failed to load game data files:\n{}", e.what()))
+			);
+			return;
+		}
 
 		units_table = new TableModel(&units_slk, &units_meta_slk, &trigger_strings);
 		items_table = new TableModel(&items_slk, &items_meta_slk, &trigger_strings);
@@ -364,14 +381,17 @@ export class Map: public QObject {
 		std::println("Trigger loading: {:>5}ms", timer.elapsed_ms());
 		timer.reset();
 
+		// Map data
+		tilesets.load();
+		std::println("Tilesets loading: {:>5}ms", timer.elapsed_ms());
+		timer.reset();
+
 		gameplay_constants.load();
 
 		info.load();
-		profile_reset();
-		terrain.load(physics);
+		terrain.load(physics, tilesets);
 
 		std::println("Terrain loading: {:>5}ms", timer.elapsed_ms());
-		profile_print();
 		timer.reset();
 
 		// Pathing Map
@@ -401,13 +421,11 @@ export class Map: public QObject {
 			load_modification_file("war3mapSkin.w3b", destructibles_slk, destructibles_meta_slk, false);
 		}
 
-		profile_reset();
 		doodads.load(terrain, info);
 		doodads.create(terrain, pathing_map);
 		glFinish(); // Ensure all GL work submitted on worker contexts is visible to the main context
 
 		std::println("Doodad loading:\t {:>5}ms", timer.elapsed_ms());
-		profile_print();
 		timer.reset();
 
 		if (hierarchy.map_file_exists("war3map.w3u")) {
@@ -427,7 +445,6 @@ export class Map: public QObject {
 		}
 
 		// Units/Items
-		profile_reset();
 		if (hierarchy.map_file_exists("war3mapUnits.doo")) {
 			units.load(terrain, info);
 			units.create();
@@ -435,7 +452,6 @@ export class Map: public QObject {
 		}
 
 		std::println("Unit loading:\t {:>5}ms", timer.elapsed_ms());
-		profile_print();
 		timer.reset();
 
 		// Abilities
@@ -479,7 +495,6 @@ export class Map: public QObject {
 		if (hierarchy.map_file_exists("war3map.w3s")) {
 			sounds.load();
 		}
-
 		std::println("Misc loading:\t {:>5}ms", timer.elapsed_ms());
 		timer.reset();
 
@@ -606,6 +621,7 @@ export class Map: public QObject {
 		}
 
 		pathing_map.save();
+		tilesets.save();
 		terrain.save();
 		shadow_map.save();
 
@@ -629,7 +645,9 @@ export class Map: public QObject {
 		save_modification_file("war3map.w3q", upgrade_slk, upgrade_meta_slk, true, false);
 		save_modification_file("war3mapSkin.w3q", upgrade_slk, upgrade_meta_slk, true, true);
 
-		info.save(terrain.tileset);
+		regions.save(terrain.offset.x, terrain.offset.y);
+
+		info.save(terrain.tileset_id);
 		trigger_strings.save();
 		triggers.save();
 		triggers.save_scripts();
@@ -638,7 +656,7 @@ export class Map: public QObject {
 			mode = ScriptMode::lua;
 		}
 
-		const auto result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, mode);
+		const auto result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, tilesets, mode);
 		if (!result.has_value()) {
 			QMessageBox::information(
 				nullptr,
@@ -704,7 +722,11 @@ export class Map: public QObject {
 				return;
 			} // ToDo handle starting locations
 
-			mdx::Extent& extent = i.mesh->mdx->sequences[i.skeleton.sequence_index].extent;
+			if (i.skeleton.sequence_index == -1) {
+				return;
+			}
+
+			mdx::Extent& extent = i.mesh->mdx->sequences.at(i.skeleton.sequence_index).extent;
 			if (!camera.inside_frustrum_transform(extent.minimum, extent.maximum, i.skeleton.matrix)) {
 				return;
 			}
@@ -719,7 +741,11 @@ export class Map: public QObject {
 
 		// Animate doodads
 		std::for_each(std::execution::par_unseq, doodads.doodads.begin(), doodads.doodads.end(), [&](Doodad& i) {
-			mdx::Extent& extent = i.mesh->mdx->sequences[i.skeleton.sequence_index].extent;
+			if (i.skeleton.sequence_index == -1) {
+				return;
+			}
+
+			mdx::Extent& extent = i.mesh->mdx->sequences.at(i.skeleton.sequence_index).extent;
 			if (!camera.inside_frustrum_transform(extent.minimum, extent.maximum, i.skeleton.matrix)) {
 				return;
 			}
@@ -737,7 +763,12 @@ export class Map: public QObject {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glPolygonMode(GL_FRONT_AND_BACK, render_wireframe ? GL_LINE : GL_FILL);
 
-		terrain.render_ground(render_pathing, render_lighting, light_direction, brush, pathing_map);
+		if (render_regions) {
+			const auto* region_brush = dynamic_cast<RegionBrush*>(brush);
+			regions.update_render_buffer(region_brush ? &region_brush->selections : nullptr);
+		}
+
+		terrain.render_ground(render_pathing, render_lighting, light_direction, brush, pathing_map, render_regions, regions.render_buffer, regions.regions.size());
 
 		if (render_doodads) {
 			for (const auto& i : doodads.doodads) {
@@ -774,14 +805,14 @@ export class Map: public QObject {
 
 		render_manager.render(render_lighting, light_direction);
 		if (render_water) {
-			terrain.render_water();
+			terrain.render_water(info, tilesets);
 		}
 
 		// physics.dynamicsWorld->debugDrawWorld();
 		// physics.draw->render();
 	}
 
-	/// Resizes the entire map by expanding/shirnking it from all sides
+	/// Resizes the entire map by expanding/shrinking it from all sides
 	/// Handles terrain, pathing map, shadow map and preplaced objects
 	/// Also, as per vanilla WE behaviour, clears the entire world undo stack
 	void resize(int delta_left, int delta_right, int delta_top, int delta_bottom);
