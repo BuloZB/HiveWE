@@ -89,6 +89,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 
 	"custom_widgets/aspect_ratio_pixmap_label.ixx"
 	"custom_widgets/color_button.ixx"
+	"custom_widgets/texture_button.ixx"
 
 	"custom_widgets/qribbon.ixx"
 	"custom_widgets/unit_selector.ixx"
@@ -98,14 +99,13 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/gl_thread_pool.ixx"
 	"utilities/utilities.ixx"
 	"utilities/opengl_utilities.ixx"
-	"utilities/modification_tables.ixx" 
+	"utilities/modification_tables.ixx"
 	"utilities/unordered_map.ixx"
-
 	"utilities/no_init_allocator.ixx"
 	"utilities/math_operations.ixx"
 	"utilities/rects.ixx"
 	"utilities/file_paths.ixx"
-	
+
 	"test.ixx"
 	"object_editor/ability_list_editor.ixx"
 )
@@ -127,7 +127,7 @@ target_sources(HiveWE_lib PRIVATE
 	"brush/terrain_brush.cpp"
 	"brush/terrain_operators.cpp"
 	"brush/unit_brush.cpp"
-	
+
 	"file_formats/mdx/mdl_reader.cpp"
 	"file_formats/mdx/mdl_writer.cpp"
 	"file_formats/mdx/mdx_reader.cpp"
@@ -139,6 +139,7 @@ target_sources(HiveWE_lib PRIVATE
 
 	"menus/doodad_palette.cpp"
 	"menus/map_info_editor.cpp"
+	"menus/scenario_info_editor.cpp"
 	"menus/map_protection_dialog.cpp"
 	"menus/map_protection_dialog.h"
 	"menus/minimap.cpp"
@@ -156,9 +157,11 @@ target_sources(HiveWE_lib PRIVATE
 
 	"asset_manager/asset_manager.cpp"
 	"asset_manager/asset_manager.h"
+	"asset_manager/asset_tree_model.cpp"
+	"asset_manager/asset_tree_model.h"
 
 	"models/single_model.cpp"
-	
+
 	"custom_widgets/aspect_ratio_pixmap_label.h"
 	"custom_widgets/color_button.h"
 
@@ -183,6 +186,4 @@ target_sources(HiveWE_lib PRIVATE
 
 	"qt_imgui/imgui_renderer.cpp"
 	"qt_imgui/qt_imgui.cpp"
-
-	
- )
+)
