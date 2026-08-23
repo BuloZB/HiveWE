@@ -14,6 +14,11 @@
 
 import PathingTexture;
 import DoodadsUndo;
+import Doodads;
+import Terrain;
+import PathingMap;
+import RenderManager;
+import WorldUndoManager;
 import Doodad;
 import SkinnedMesh;
 import Skeleton;
@@ -66,7 +71,14 @@ class DoodadBrush: public Brush {
 
 	Action action = Action::none;
 
-	DoodadBrush();
+	DoodadBrush(Doodads& doodads, Terrain& terrain, PathingMap& pathing_map,
+		    RenderManager& render_manager, WorldUndoManager& world_undo);
+
+	Doodads& doodads;
+	Terrain& terrain;
+	PathingMap& pathing_map;
+	RenderManager& render_manager;
+	WorldUndoManager& world_undo;
 
 	glm::vec2 get_position() const override;
 
@@ -82,11 +94,11 @@ class DoodadBrush: public Brush {
 	void copy_selection() override;
 	void cut_selection() override;
 	void clear_selection() override;
-	void place_clipboard() override;
+	void place_clipboard(WorldEditContext& ctx) override;
 
-	void apply_begin() override;
-	void apply(double frame_delta) override;
-	void apply_end() override;
+	void apply_begin(WorldEditContext& ctx) override;
+	void apply(WorldEditContext& ctx, double frame_delta) override;
+	void apply_end(WorldEditContext& ctx) override;
 	void render_brush() override;
 	void render_selection() const override;
 	void render_clipboard() override;

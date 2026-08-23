@@ -15,6 +15,8 @@ import Triggers;
 class TriggerExplorer : public QTreeView {
 	Q_OBJECT
 
+	Triggers& triggers;
+
 	QMenu* contextMenu = new QMenu(this);
 	QAction* addCategory = new QAction;
 	QAction* addGuiTrigger = new QAction;
@@ -27,7 +29,7 @@ class TriggerExplorer : public QTreeView {
 	QAction* initiallyOn = new QAction;
 
 public:
-	explicit TriggerExplorer(QWidget* parent = nullptr);
+	explicit TriggerExplorer(Triggers& triggers, QWidget* parent = nullptr);
 
 	void createCategory();
 	void createJassTrigger();

@@ -13,7 +13,7 @@ import Globals;
 
 constexpr int map_header_id = 0;
 
-TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
+TreeModel::TreeModel(Triggers& triggers, QObject* parent) : QAbstractItemModel(parent), triggers(triggers) {
 	rootItem = new TreeItem();
 
 	TreeItem* map_header = new TreeItem(rootItem);
@@ -21,7 +21,7 @@ TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
 	map_header->type = Classifier::script;
 	folders[0] = map_header;
 
-	for (const auto& i : map->triggers.categories) {
+	for (const auto& i : triggers.categories) {
 		if (i.parent_id == -1) {
 			continue;
 		}
@@ -32,7 +32,7 @@ TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
 		folders[i.id] = item;
 	}
 
-	for (auto& i : map->triggers.triggers) {
+	for (auto& i : triggers.triggers) {
 		TreeItem* item = new TreeItem(folders[i.parent_id]);
 		item->id = i.id;
 		item->type = i.classifier;
@@ -41,7 +41,7 @@ TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
 		item->run_on_initialization = i.run_on_initialization;
 	}
 
-	for (const auto& i : map->triggers.variables) {
+	for (const auto& i : triggers.variables) {
 		TreeItem* item = new TreeItem(folders[i.parent_id]);
 		item->id = i.id;
 		item->type = Classifier::variable;
@@ -203,8 +203,8 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 		case Classifier::comment:
 		case Classifier::gui:
 		case Classifier::script:
-			for (int i = 0; i < map->triggers.triggers.size(); i++) {
-				Trigger& trigger = map->triggers.triggers[i];
+			for (int i = 0; i < triggers.triggers.size(); i++) {
+				Trigger& trigger = triggers.triggers[i];
 				if (trigger.id == childItem->id) {
 					trigger.parent_id = destinationParentItem->id;
 					break;
@@ -212,8 +212,8 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 			}
 			break;
 		case Classifier::category:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				TriggerCategory& category = map->triggers.categories[i];
+			for (int i = 0; i < triggers.categories.size(); i++) {
+				TriggerCategory& category = triggers.categories[i];
 				if (category.id == childItem->id) {
 					category.parent_id = destinationParentItem->id;
 					break;
@@ -221,8 +221,8 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 			}
 			break;
 		case Classifier::variable:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				TriggerVariable& variable = map->triggers.variables[i];
+			for (int i = 0; i < triggers.categories.size(); i++) {
+				TriggerVariable& variable = triggers.variables[i];
 				if (variable.id == childItem->id) {
 					variable.parent_id = destinationParentItem->id;
 					break;
@@ -245,7 +245,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const {
 	switch (role) {
 		case Qt::DisplayRole:
 		case Qt::EditRole:
-			return item->data(index.column());
+			return item->data(triggers, index.column());
 		case Qt::DecorationRole:
 			switch (item->type) {
 				case Classifier::category:
@@ -270,7 +270,7 @@ bool TreeModel::setData(const QModelIndex& index, const QVariant& value, int rol
 	}
 
 	TreeItem* item = static_cast<TreeItem*>(index.internalPointer());
-	return item->setData(index, value, role);
+	return item->setData(triggers, index, value, role);
 }
 
 Qt::ItemFlags TreeModel::flags(const QModelIndex& index) const {
@@ -292,7 +292,7 @@ Qt::DropActions TreeModel::supportedDropActions() const {
 
 QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int role) const {
 	if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-		return rootItem->data(section);
+		return rootItem->data(triggers, section);
 	}
 
 	return QVariant();
@@ -368,7 +368,7 @@ void TreeItem::removeChild(TreeItem* item) {
 	delete item;
 }
 
-QVariant TreeItem::data(int column) const {
+QVariant TreeItem::data(const Triggers& triggers, int column) const {
 	if (column != 0) {
 		throw;
 	}
@@ -377,7 +377,7 @@ QVariant TreeItem::data(int column) const {
 		case Classifier::comment:
 		case Classifier::gui:
 		case Classifier::script:
-			for (const auto& i : map->triggers.triggers) {
+			for (const auto& i : triggers.triggers) {
 				if (i.id == id) {
 					return QString::fromStdString(i.name);
 				}
@@ -387,14 +387,14 @@ QVariant TreeItem::data(int column) const {
 			}
 			break;
 		case Classifier::variable:
-			for (const auto& i : map->triggers.variables) {
+			for (const auto& i : triggers.variables) {
 				if (i.id == id) {
 					return QString::fromStdString(i.name);
 				}
 			}
 			break;
 		case Classifier::category:
-			for (const auto& i : map->triggers.categories) {
+			for (const auto& i : triggers.categories) {
 				if (i.id == id) {
 					return QString::fromStdString(i.name);
 				}
@@ -403,7 +403,7 @@ QVariant TreeItem::data(int column) const {
 	return "Not found";
 }
 
-bool TreeItem::setData(const QModelIndex& index, const QVariant& value, int role) {
+bool TreeItem::setData(Triggers& triggers, const QModelIndex& index, const QVariant& value, int role) {
 	if (value.toString().isEmpty()) {
 		return false;
 	}
@@ -412,7 +412,7 @@ bool TreeItem::setData(const QModelIndex& index, const QVariant& value, int role
 		case Classifier::comment:
 		case Classifier::gui:
 		case Classifier::script:
-			for (auto& i : map->triggers.triggers) {
+			for (auto& i : triggers.triggers) {
 				if (i.id == id) {
 					i.name = value.toString().toStdString();
 					return true;
@@ -420,7 +420,7 @@ bool TreeItem::setData(const QModelIndex& index, const QVariant& value, int role
 			}
 			break;
 		case Classifier::variable:
-			for (auto& i : map->triggers.variables) {
+			for (auto& i : triggers.variables) {
 				if (i.id == id) {
 					i.name = value.toString().toStdString();
 					return true;
@@ -428,7 +428,7 @@ bool TreeItem::setData(const QModelIndex& index, const QVariant& value, int role
 			}
 			break;
 		case Classifier::category:
-			for (auto& i : map->triggers.categories) {
+			for (auto& i : triggers.categories) {
 				if (i.id == id) {
 					i.name = value.toString().toStdString();
 					return true;

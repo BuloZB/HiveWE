@@ -16,14 +16,17 @@ import <glm/gtc/matrix_transform.hpp>;
 
 import MapGlobal;
 
-UnitBrush::UnitBrush() : Brush() {}
+UnitBrush::UnitBrush(Units& units, Terrain& terrain, PathingMap& pathing_map,
+		   RenderManager& render_manager, WorldUndoManager& world_undo)
+	: Brush(), units(units), terrain(terrain), pathing_map(pathing_map),
+	  render_manager(render_manager), world_undo(world_undo) {}
 
 void UnitBrush::set_shape(const Shape new_shape) {}
 
 void UnitBrush::key_press_event(QKeyEvent* event) {
 	if (event->modifiers() & Qt::KeypadModifier) {
 		if (!event->isAutoRepeat()) {
-			map->world_undo.new_undo_group();
+			world_undo.new_undo_group();
 			unit_state_undo = std::make_unique<UnitStateAction>();
 			for (const auto& i : selections) {
 				unit_state_undo->old_units.push_back(*i);
@@ -49,8 +52,8 @@ void UnitBrush::key_press_event(QKeyEvent* event) {
 		switch (event->key()) {
 			case Qt::Key_A:
 				selections.clear();
-				selections.reserve(map->units.units.size());
-				for (auto& i : map->units.units) {
+				selections.reserve(units.units.size());
+				for (auto& i : units.units) {
 					if (i.id == "sloc") {
 						continue;
 					}
@@ -72,7 +75,7 @@ void UnitBrush::key_release_event(QKeyEvent* event) {
 			for (const auto& i : selections) {
 				unit_state_undo->new_units.push_back(*i);
 			}
-			map->world_undo.add_undo_action(std::move(unit_state_undo));
+			world_undo.add_undo_action(std::move(unit_state_undo));
 		}
 	}
 }
@@ -82,21 +85,21 @@ void UnitBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	if (event->button() == Qt::LeftButton && input_handler.mouse.y > 0.f) {
 		if (mode == Mode::selection) {
 			if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
-				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+				const auto id = render_manager.pick_unit_id_under_mouse(units, input_handler.mouse);
 				if (id) {
-					if (selections.contains(&map->units.units[id.value()])) {
-						selections.erase(&map->units.units[id.value()]);
+					if (selections.contains(&units.units[id.value()])) {
+						selections.erase(&units.units[id.value()]);
 					} else {
-						selections.emplace(&map->units.units[id.value()]);
+						selections.emplace(&units.units[id.value()]);
 					}
 					return;
 				}
 			}
 
 			if (!event->modifiers()) {
-				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+				const auto id = render_manager.pick_unit_id_under_mouse(units, input_handler.mouse);
 				if (id) {
-					Unit& unit = map->units.units[id.value()];
+					Unit& unit = units.units[id.value()];
 
 					drag_start = input_handler.mouse_world;
 					dragging = true;
@@ -129,7 +132,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 			if (dragging) {
 				if (!dragged) {
 					dragged = true;
-					map->world_undo.new_undo_group();
+					world_undo.new_undo_group();
 					unit_state_undo = std::make_unique<UnitStateAction>();
 					for (const auto& i : selections) {
 						unit_state_undo->old_units.push_back(*i);
@@ -143,7 +146,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 
 				for (const auto& unit : selections) {
 					unit->position += offset;
-					unit->position.z = map->terrain.interpolated_height(unit->position.x, unit->position.y, true);
+					unit->position.z = terrain.interpolated_height(unit->position.x, unit->position.y, true);
 					unit->update();
 				}
 			} else if (event->modifiers() & Qt::ControlModifier) {
@@ -160,7 +163,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 			} else if (selection_started) {
 				const glm::vec3 size = input_handler.mouse_world - selection_start;
 
-				const auto query = map->units.query_area({selection_start.x, selection_start.y, size.x, size.y});
+				const auto query = units.query_area({selection_start.x, selection_start.y, size.x, size.y});
 				if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
 					selections.insert(query.begin(), query.end());
 				} else if (event->modifiers() & Qt::KeyboardModifier::AltModifier) {
@@ -172,7 +175,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 					selections.insert(query.begin(), query.end());
 				}
 
-				//selections = map->units.query_area({ selection_start.x, selection_start.y, size.x, size.y });
+				//selections = units.query_area({ selection_start.x, selection_start.y, size.x, size.y });
 				emit selection_changed();
 			}
 		}
@@ -186,7 +189,7 @@ void UnitBrush::mouse_release_event(QMouseEvent* event) {
 		for (const auto& i : selections) {
 			unit_state_undo->new_units.push_back(*i);
 		}
-		map->world_undo.add_undo_action(std::move(unit_state_undo));
+		world_undo.add_undo_action(std::move(unit_state_undo));
 	}
 
 	Brush::mouse_release_event(event);
@@ -198,13 +201,13 @@ void UnitBrush::delete_selection() {
 	}
 
 	// Undo/redo
-	map->world_undo.new_undo_group();
+	world_undo.new_undo_group();
 	auto action = std::make_unique<UnitDeleteAction>();
 	for (const auto& i : selections) {
 		action->units.push_back(*i);
 	}
-	map->world_undo.add_undo_action(std::move(action));
-	map->units.remove_units(selections);
+	world_undo.add_undo_action(std::move(action));
+	units.remove_units(selections);
 
 	selections.clear();
 	emit selection_changed();
@@ -234,36 +237,36 @@ void UnitBrush::clear_selection() {
 	emit selection_changed();
 }
 
-void UnitBrush::place_clipboard() {
-	apply_begin();
+void UnitBrush::place_clipboard(WorldEditContext& ctx) {
+	apply_begin(ctx);
 	for (const auto& i : clipboard) {
-		Unit& new_unit = map->units.add_unit(i);
+		Unit& new_unit = ctx.units.add_unit(i);
 		new_unit.creation_number = ++Unit::auto_increment;
 		glm::vec3 final_position = glm::vec3(glm::vec2(input_handler.mouse_world + i.position) - clipboard_mouse_offset, 0);
 
-		final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
+		final_position.z = ctx.terrain.interpolated_height(final_position.x, final_position.y, true);
 
 		new_unit.position = final_position;
 		new_unit.update();
 		unit_undo->units.push_back(new_unit);
 	}
-	apply_end();
+	apply_end(ctx);
 }
 
-void UnitBrush::apply_begin() {
-	map->world_undo.new_undo_group();
+void UnitBrush::apply_begin(WorldEditContext& ctx) {
+	world_undo.new_undo_group();
 	unit_undo = std::make_unique<UnitAddAction>();
 }
 
-void UnitBrush::apply(double frame_delta) {
+void UnitBrush::apply(WorldEditContext& ctx, double frame_delta) {
 	if (id.empty()) {
 		return;
 	}
 
 	glm::vec3 final_position = input_handler.mouse_world;
-	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
+	final_position.z = ctx.terrain.interpolated_height(final_position.x, final_position.y, true);
 
-	Unit& new_unit = map->units.add_unit(id, final_position);
+	Unit& new_unit = ctx.units.add_unit(id, final_position);
 	new_unit.angle = rotation;
 	new_unit.update();
 	new_unit.player = player_id;
@@ -275,8 +278,8 @@ void UnitBrush::apply(double frame_delta) {
 	}
 }
 
-void UnitBrush::apply_end() {
-	map->world_undo.add_undo_action(std::move(unit_undo));
+void UnitBrush::apply_end(WorldEditContext& ctx) {
+	world_undo.add_undo_action(std::move(unit_undo));
 }
 
 void UnitBrush::render_brush() {
@@ -284,13 +287,13 @@ void UnitBrush::render_brush() {
 	const float move_height = units_slk.data<float>("moveheight", id);
 
 	glm::vec3 final_position = input_handler.mouse_world;
-	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
+	final_position.z = terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
 	const glm::vec3 final_scale = glm::vec3(model_scale / 128.f);
 
 	if (mesh) {
 		skeleton.update_location(final_position, glm::angleAxis(rotation, glm::vec3(0, 0, 1)), final_scale);
 		skeleton.update(0.016f);
-		map->render_manager.queue_render(*mesh, skeleton, glm::vec3(1.f), 0);
+		render_manager.queue_render(*mesh, skeleton, glm::vec3(1.f), 0);
 	}
 }
 
@@ -326,13 +329,13 @@ void UnitBrush::render_clipboard() {
 		const float move_height = units_slk.data<float>("moveheight", i.id);
 
 		glm::vec3 final_position = glm::vec3(glm::vec2(input_handler.mouse_world + i.position) - clipboard_mouse_offset, 0);
-		final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
+		final_position.z = terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
 
 		const glm::vec3 final_scale = glm::vec3(model_scale / 128.f);
 
 		i.skeleton.update_location(final_position, glm::angleAxis(i.angle, glm::vec3(0, 0, 1)), final_scale);
 		i.skeleton.update(0.016f);
-		map->render_manager.queue_render(*i.mesh, i.skeleton, glm::vec3(1.f), 0);
+		render_manager.queue_render(*i.mesh, i.skeleton, glm::vec3(1.f), 0);
 	}
 }
 
@@ -340,7 +343,7 @@ bool UnitBrush::can_place() {
 	const float radius = units_slk.data<float>("collision", id) / 128.f;
 	const glm::vec2 position = input_handler.mouse_world;
 
-	for (const auto& i : map->units.units) {
+	for (const auto& i : units.units) {
 		const float other_radius = units_slk.data<float>("collision", i.id) / 128.f;
 
 		if (glm::distance(position, glm::vec2(i.position)) < radius + other_radius) {
@@ -348,7 +351,7 @@ bool UnitBrush::can_place() {
 		}
 	}
 
-	return map->pathing_map.is_area_free(position, radius, PathingMap::Flags::unwalkable);
+	return pathing_map.is_area_free(position, radius, PathingMap::Flags::unwalkable);
 }
 
 void UnitBrush::set_random_rotation() {
@@ -362,7 +365,7 @@ void UnitBrush::set_random_rotation() {
 void UnitBrush::set_unit(const std::string& id) {
 	context->makeCurrent();
 	this->id = id;
-	mesh = map->units.get_mesh(id);
+	mesh = units.get_mesh(id);
 	skeleton = Skeleton(mesh->mdx, Units::get_required_animation_names(id));
 }
 

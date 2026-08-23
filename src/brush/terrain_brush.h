@@ -8,6 +8,8 @@ import Terrain;
 import TerrainUndo;
 import WorldUndoManager;
 import Rects;
+import Units;
+import Tileset;
 
 class TerrainBrush: public Brush {
 	// Friend declarations for terrain operators
@@ -31,15 +33,21 @@ class TerrainBrush: public Brush {
 	bool dragging = false;
 	bool dragged = false;
 
-	TerrainBrush();
+	TerrainBrush(Terrain& terrain, Units& units, TilesetData& tilesets,
+		     WorldUndoManager& world_undo);
+
+	Terrain& terrain;
+	Units& units;
+	TilesetData& tilesets;
+	WorldUndoManager& world_undo;
 
 	void mouse_release_event(QMouseEvent* event) override;
 	void mouse_press_event(QMouseEvent* event, double frame_delta) override;
 	void mouse_move_event(QMouseEvent* event, double frame_delta) override;
 
-	void apply_begin() override;
-	void apply(double frame_delta) override;
-	void apply_end() override;
+	void apply_begin(WorldEditContext& ctx) override;
+	void apply(WorldEditContext& ctx, double frame_delta) override;
+	void apply_end(WorldEditContext& ctx) override;
 
 	void add_terrain_undo(WorldEditContext& ctx, const TerrainRect& area, TerrainUndoType type);
 	void add_pathing_undo(WorldEditContext& ctx, const PathingRect& area);

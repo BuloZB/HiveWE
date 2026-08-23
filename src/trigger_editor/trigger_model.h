@@ -19,8 +19,8 @@ public:
 	void appendChild(TreeItem* child);
 	void removeChild(TreeItem* child);
 
-	QVariant data(int column) const;
-	bool setData(const QModelIndex& index, const QVariant& value, int role);
+	QVariant data(const Triggers& triggers, int column) const;
+	bool setData(Triggers& triggers, const QModelIndex& index, const QVariant& value, int role);
 	int row() const;
 
 	Classifier type = Classifier::category;
@@ -37,7 +37,7 @@ class TreeModel : public QAbstractItemModel {
 	Q_OBJECT
 
 public:
-	explicit TreeModel(QObject* parent = nullptr);
+	explicit TreeModel(Triggers& triggers, QObject* parent = nullptr);
 	~TreeModel();
 
 	QVariant data(const QModelIndex& index, int role) const override;
@@ -64,6 +64,8 @@ public:
 	bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column, const QModelIndex& parent) override;
 
 private:
+	Triggers& triggers;
+
 	TreeItem* rootItem;
 
 	std::unordered_map<int, TreeItem*> folders;

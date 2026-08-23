@@ -20,7 +20,7 @@ import Globals;
 
 constexpr int map_header_id = 0;
 
-TriggerExplorer::TriggerExplorer(QWidget* parent) : QTreeView(parent) {
+TriggerExplorer::TriggerExplorer(Triggers& triggers, QWidget* parent) : QTreeView(parent), triggers(triggers) {
 	setSelectionMode(QAbstractItemView::SingleSelection);
 	setSelectionBehavior(QAbstractItemView::SelectRows);
 	setContextMenuPolicy(Qt::CustomContextMenu);
@@ -79,8 +79,8 @@ TriggerExplorer::TriggerExplorer(QWidget* parent) : QTreeView(parent) {
 
 		runOnInitialization->setVisible(false);
 		if (item->type == Classifier::script || item->type == Classifier::gui) {
-			for (int i = 0; i < map->triggers.triggers.size(); i++) {
-				Trigger& trigger = map->triggers.triggers[i];
+			for (int i = 0; i < triggers.triggers.size(); i++) {
+				Trigger& trigger = triggers.triggers[i];
 				if (trigger.id == item->id) {
 					runOnInitialization->setVisible(item->type == Classifier::gui && trigger.is_script);
 					runOnInitialization->setChecked(item->run_on_initialization);
@@ -102,14 +102,14 @@ TriggerExplorer::TriggerExplorer(QWidget* parent) : QTreeView(parent) {
 
 		edit(index);
 	});
-	connect(isEnabled, &QAction::triggered, this, [&](bool checked) {
+	connect(isEnabled, &QAction::triggered, this, [&](const bool checked) {
 		const auto index = selectionModel()->selectedRows().front();
 		TreeItem* item = static_cast<TreeItem*>(index.internalPointer());
 
 		item->enabled = checked;
 
-		for (int i = 0; i < map->triggers.triggers.size(); i++) {
-			Trigger& trigger = map->triggers.triggers[i];
+		for (int i = 0; i < triggers.triggers.size(); i++) {
+			Trigger& trigger = triggers.triggers[i];
 			if (trigger.id == item->id) {
 				trigger.is_enabled = checked;
 				break;
@@ -122,8 +122,8 @@ TriggerExplorer::TriggerExplorer(QWidget* parent) : QTreeView(parent) {
 
 		item->run_on_initialization = checked;
 
-		for (int i = 0; i < map->triggers.triggers.size(); i++) {
-			Trigger& trigger = map->triggers.triggers[i];
+		for (int i = 0; i < triggers.triggers.size(); i++) {
+			Trigger& trigger = triggers.triggers[i];
 			if (trigger.id == item->id) {
 				trigger.run_on_initialization = checked;
 				break;
@@ -136,8 +136,8 @@ TriggerExplorer::TriggerExplorer(QWidget* parent) : QTreeView(parent) {
 
 		item->initially_on = checked;
 
-		for (int i = 0; i < map->triggers.triggers.size(); i++) {
-			Trigger& trigger = map->triggers.triggers[i];
+		for (int i = 0; i < triggers.triggers.size(); i++) {
+			Trigger& trigger = triggers.triggers[i];
 			if (trigger.id == item->id) {
 				trigger.initially_on = checked;
 				break;
@@ -165,7 +165,7 @@ void TriggerExplorer::createCategory() {
 	category.name = "New Category";
 	category.id = ++Trigger::next_id;
 	category.parent_id = parent_item->id;
-	map->triggers.categories.push_back(category);
+	triggers.categories.push_back(category);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, Classifier::category, category.id);
 	expand(index);
@@ -202,7 +202,7 @@ void TriggerExplorer::createJassTrigger() {
 	trigger.id = ++Trigger::next_id;
 	trigger.is_script = true;
 	trigger.parent_id = parent_item->id;
-	map->triggers.triggers.push_back(trigger);
+	triggers.triggers.push_back(trigger);
 	
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
 	expand(index);
@@ -235,7 +235,7 @@ void TriggerExplorer::createGuiTrigger() {
 	trigger.name = "New Trigger";
 	trigger.id = ++Trigger::next_id;
 	trigger.parent_id = parent_item->id;
-	map->triggers.triggers.push_back(trigger);
+	triggers.triggers.push_back(trigger);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
 	expand(index);
@@ -267,7 +267,7 @@ void TriggerExplorer::createVariable() {
 	variable.id = ++Trigger::next_id;
 	variable.name = "NewVariable";
 	variable.parent_id = parent_item->id;
-	map->triggers.variables.push_back(variable);
+	triggers.variables.push_back(variable);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, Classifier::variable, variable.id);
 	expand(index);
@@ -300,47 +300,39 @@ void TriggerExplorer::createComment() {
 	trigger.name = "New Comment";
 	trigger.id = ++Trigger::next_id;
 	trigger.parent_id = parent_item->id;
-	map->triggers.triggers.push_back(trigger);
+	triggers.triggers.push_back(trigger);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
 	expand(index);
 	selectionModel()->setCurrentIndex(index.sibling(parent_item->children.size() - 1, 0), QItemSelectionModel::SelectionFlag::ClearAndSelect);
 }
 
-void recursively_delete(TreeItem* parent) {
+static void recursively_delete(Triggers& triggers, TreeItem* parent) {
 	for (auto child : parent->children) {
-		recursively_delete(child);
+		recursively_delete(triggers, child);
 	}
 
 	switch (parent->type) {
 		case Classifier::comment:
 		case Classifier::gui:
 		case Classifier::script:
-			for (int i = 0; i < map->triggers.triggers.size(); i++) {
-				const Trigger& trigger = map->triggers.triggers[i];
-				if (trigger.id == parent->id) {
-					map->triggers.triggers.erase(map->triggers.triggers.begin() + i);
-					break;
-				}
-			}
+			std::erase_if(triggers.triggers, [&](const auto& trigger) -> bool {
+				return trigger.id == parent->id;
+			});
 			break;
 		case Classifier::category:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				const TriggerCategory& category = map->triggers.categories[i];
-				if (category.id == parent->id) {
-					map->triggers.categories.erase(map->triggers.categories.begin() + i);
-					break;
-				}
-			}
+			std::erase_if(triggers.categories, [&](const auto& category) -> bool {
+				return category.id == parent->id;
+			});
 			break;
 		case Classifier::variable:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				const TriggerVariable& variable = map->triggers.variables[i] ;
-				if (variable.id == parent->id) {
-					map->triggers.variables.erase(map->triggers.variables.begin() + i);
-					break;
-				}
-			}
+			std::erase_if(triggers.variables, [&](const auto& variable) -> bool {
+				return variable.id == parent->id;
+			});
+			break;
+		case Classifier::map:
+			break;
+		case Classifier::library:
 			break;
 	}
 };
@@ -348,13 +340,13 @@ void recursively_delete(TreeItem* parent) {
 void TriggerExplorer::deleteSelection() {
 	auto indices = selectionModel()->selectedRows();
 
-	int choice = QMessageBox::question(this, "Delete selected items?", "Are you sure you want to delete these triggers PERMANENTLY?", QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+	const int choice = QMessageBox::question(this, "Delete selected items?", "Are you sure you want to delete these triggers PERMANENTLY?", QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
 	if (choice == QMessageBox::Yes) {
 		for (const auto index : indices) {
 			if (index.isValid()) {
 				TreeItem* item = static_cast<TreeItem*>(index.internalPointer());
-				recursively_delete(item);
+				recursively_delete(triggers, item);
 				emit itemAboutToBeDeleted(item);
 
 				dynamic_cast<TreeModel*>(model())->deleteItem(index);

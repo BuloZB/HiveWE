@@ -28,12 +28,14 @@ public:
 
 	void save_changes();
 private:
+	Triggers& triggers;
+
 	Ui::TriggerEditor ui;
 
 	ads::CDockManager* dock_manager = nullptr;
 	ads::CDockAreaWidget* dock_area = nullptr;
 
-	TriggerExplorer* explorer = new TriggerExplorer;
+	TriggerExplorer* explorer;
 	TreeModel* model;
 
 	QPlainTextEdit* compile_output = new QPlainTextEdit;
@@ -53,7 +55,7 @@ private:
 	std::unordered_map<std::string, QIcon> trigger_icons;
 
 	void focus_search_window();
-	void save_tab(ads::CDockWidget* tab);
+	void save_tab(const ads::CDockWidget* tab);
 
 	void item_clicked(const QModelIndex& index);
 	void show_gui_trigger(QTreeWidget* edit, const Trigger& trigger);

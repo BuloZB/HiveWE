@@ -10,7 +10,7 @@ import MapGlobal;
 
 namespace fs = std::filesystem;
 
-PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
+PathingPalette::PathingPalette(QWidget *parent) : Palette(parent), pathing_map(map->pathing_map) {
 	ui.setupUi(this);
 
 	setAttribute(Qt::WA_DeleteOnClose);
@@ -97,9 +97,9 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 		image = image.convertToFormat(QImage::Format::Format_RGB888);
 		image.flip(Qt::Orientation::Vertical);
 
-		const bool success = map->pathing_map.from_rgb(std::span{const_cast<uint8_t*>(image.constBits()), static_cast<size_t>(image.sizeInBytes())});
+		const bool success = pathing_map.from_rgb(std::span{const_cast<uint8_t*>(image.constBits()), static_cast<size_t>(image.sizeInBytes())});
 		if (!success) {
-			const auto msg = std::format("Failed to load image. It has to be a {}x{} RGB image", map->pathing_map.width, map->pathing_map.height);
+			const auto msg = std::format("Failed to load image. It has to be a {}x{} RGB image", pathing_map.width, pathing_map.height);
 			QMessageBox::critical(this, "Error", QString::fromStdString(msg));
 		}
 	});
@@ -117,8 +117,8 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 		const fs::path path(file_name.toStdString());
 		settings.setValue("openDirectoryPathing", QString::fromStdString(path.parent_path().string()));
 
-		const auto data = map->pathing_map.to_rgb();
-		QImage image(data.data(), map->pathing_map.width, map->pathing_map.height, QImage::Format_RGB888);
+		const auto data = pathing_map.to_rgb();
+		QImage image(data.data(), pathing_map.width, pathing_map.height, QImage::Format_RGB888);
 		image.flip(Qt::Orientation::Vertical);
 		if (!image.save(file_name, "PNG")) {
 			QMessageBox::critical(this, "Error", "Failed to save image");

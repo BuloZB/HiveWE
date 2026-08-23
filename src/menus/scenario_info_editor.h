@@ -8,6 +8,9 @@
 
 #include "ui_scenario_info_editor.h"
 
+import MapInfo;
+import TriggerStrings;
+
 struct PlayerRow {
 	QLineEdit* name;
 	QLabel* color;
@@ -23,6 +26,9 @@ class ScenarioInfoEditor: public QDialog {
 	ScenarioInfoEditor(QWidget* parent = nullptr);
 
 	Ui::ScenarioInfoEditor ui;
+
+	MapInfo& info;
+	TriggerStrings& trigger_strings;
 	
 	std::vector<PlayerRow> player_rows;
 

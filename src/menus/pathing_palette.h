@@ -7,6 +7,8 @@
 #include "palette.h"
 #include "pathing_brush.h"
 
+import PathingMap;
+
 class PathingPalette : public Palette {
 	Q_OBJECT
 
@@ -16,6 +18,8 @@ public:
 
 private:
 	bool event(QEvent *e) override;
+
+	PathingMap& pathing_map;
 
 	Ui::PathingPalette ui;
 	PathingBrush brush;

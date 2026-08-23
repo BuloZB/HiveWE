@@ -3,6 +3,7 @@
 
 import std;
 import MapGlobal;
+import WorldUndoManager;
 import Terrain;
 import DoodadsUndo;
 import PathingUndo;
@@ -11,8 +12,13 @@ import Camera;
 import Rects;
 import PathingMap;
 
-TerrainBrush::TerrainBrush() :
+TerrainBrush::TerrainBrush(Terrain& terrain, Units& units, TilesetData& tilesets,
+		       WorldUndoManager& world_undo) :
 	Brush(),
+	terrain(terrain),
+	units(units),
+	tilesets(tilesets),
+	world_undo(world_undo),
 	cliff_operator(*this),
 	height_operator(*this),
 	texture_operator(*this),
@@ -57,9 +63,9 @@ bool TerrainBrush::can_combine(const TerrainOperator& a, const TerrainOperator& 
 
 void TerrainBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	//if (event->button() == Qt::LeftButton && mode == Mode::selection && !event->modifiers() && input_handler.mouse.y > 0.f) {
-	/*auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+	/*auto id = map->render_manager.pick_unit_id_under_mouse(units, input_handler.mouse);
 		if (id) {
-			Unit& unit = map->units.units[id.value()];
+			Unit& unit = units.units[id.value()];
 			selections = { &unit };
 			dragging = true;
 			drag_x_offset = input_handler.mouse_world.x - unit.position.x;
@@ -88,7 +94,7 @@ void TerrainBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 				for (auto& i : selections) {
 					i->position.x = input_handler.mouse_world.x - drag_x_offset;
 					i->position.y = input_handler.mouse_world.y - drag_y_offset;
-					i->position.z = map->terrain.interpolated_height(i->position.x, i->position.y);
+					i->position.z = terrain.interpolated_height(i->position.x, i->position.y);
 					i->update();
 				}
 			} else if (event->modifiers() & Qt::ControlModifier) {
@@ -103,7 +109,7 @@ void TerrainBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 				}
 			} else if (selection_started) {
 				const glm::vec2 size = glm::vec2(input_handler.mouse_world) - selection_start;
-				selections = map->units.query_area({ selection_start.x, selection_start.y, size.x, size.y });
+				selections = units.query_area({ selection_start.x, selection_start.y, size.x, size.y });
 			}
 		}
 	}*/
@@ -132,13 +138,13 @@ bool TerrainBrush::has_active_operators() {
 	return false;
 }
 
-void TerrainBrush::apply_begin() {
+void TerrainBrush::apply_begin(WorldEditContext& ctx) {
 	// do nothing if there are no active operators
 	if (!has_active_operators()) {
 		return;
 	}
 
-	const auto& terrain = map->terrain;
+	auto& terrain = ctx.terrain;
 	const int width = terrain.width;
 	const int height = terrain.height;
 
@@ -150,7 +156,7 @@ void TerrainBrush::apply_begin() {
 	const int center_y = area.y() + area.height() * 0.5f;
 
 	// setup for undo/redo — snapshot all corners
-	map->world_undo.new_undo_group();
+	world_undo.new_undo_group();
 	old_corners_width = width;
 	old_corners_height = height;
 	old_corners.resize(width * height);
@@ -159,23 +165,23 @@ void TerrainBrush::apply_begin() {
 			old_corners[j * width + i] = terrain.get_corner(i, j);
 		}
 	}
-	old_pathing_cells_static = map->pathing_map.pathing_cells_static;
+	old_pathing_cells_static = ctx.pathing_map.pathing_cells_static;
 
 	// apply all active operators
 	for (TerrainOperator& op : terrain_operators) {
 		if (op.is_enabled()) {
-			op.apply_begin(area, center_x, center_y);
+			op.apply_begin(terrain, area, center_x, center_y);
 		}
 	}
 }
 
-void TerrainBrush::apply(double frame_delta) {
+void TerrainBrush::apply(WorldEditContext& ctx, double frame_delta) {
 	// do nothing if there are no active operators
 	if (!has_active_operators()) {
 		return;
 	}
 
-	const auto& terrain = map->terrain;
+	auto& terrain = ctx.terrain;
 	const int width = terrain.width;
 	const int height = terrain.height;
 
@@ -192,7 +198,7 @@ void TerrainBrush::apply(double frame_delta) {
 	for (TerrainOperator& op : terrain_operators) {
 		if (op.is_active) {
 			affected_area =
-				affected_area.united(op.apply(area, frame_delta)).intersected({0, 0, map->pathing_map.width, map->pathing_map.height});
+				affected_area.united(op.apply(terrain, area, frame_delta)).intersected({0, 0, ctx.pathing_map.width, ctx.pathing_map.height});
 		}
 	}
 
@@ -206,21 +212,21 @@ void TerrainBrush::apply(double frame_delta) {
 
 	for (int i = affected_area.x(); i <= affected_area.right(); i++) {
 		for (int j = affected_area.y(); j <= affected_area.bottom(); j++) {
-			const int index = j * map->pathing_map.width + i;
-			map->pathing_map.pathing_cells_static[index] &= clear_mask;
+			const int index = j * ctx.pathing_map.width + i;
+			ctx.pathing_map.pathing_cells_static[index] &= clear_mask;
 			uint8_t mask =
-				map->terrain.get_terrain_pathing(i, j, apply_tile_pathing, apply_cliff_pathing, apply_water_pathing, map->tilesets);
-			map->pathing_map.pathing_cells_static[index] |= mask;
+				ctx.terrain.get_terrain_pathing(i, j, apply_tile_pathing, apply_cliff_pathing, apply_water_pathing, tilesets);
+			ctx.pathing_map.pathing_cells_static[index] |= mask;
 		}
 	}
 
-	map->pathing_map.upload_static_pathing();
+	ctx.pathing_map.upload_static_pathing();
 
 	if (height_operator.is_active || cliff_operator.is_active) {
 		TerrainRectF object_area = updated_area.to_terrain_f();
 
 		if (change_doodad_heights) {
-			for (auto&& i : map->doodads.doodads) {
+			for (auto&& i : ctx.doodads.doodads) {
 				if (object_area.contains(i.position.x, i.position.y)) {
 					if (std::find_if(
 							pre_change_doodads.begin(),
@@ -232,31 +238,22 @@ void TerrainBrush::apply(double frame_delta) {
 						== pre_change_doodads.end()) {
 						pre_change_doodads.push_back(i);
 					}
-					i.position.z = map->terrain.interpolated_height(i.position.x, i.position.y, true);
-					i.update(map->terrain);
+					i.position.z = ctx.terrain.interpolated_height(i.position.x, i.position.y, true);
+					i.update(ctx.terrain);
 					post_change_doodads[i.creation_number] = i;
 				}
 			}
 		}
 
-		map->units.update_area(object_area, map->terrain);
+		ctx.units.update_area(object_area, ctx.terrain);
 	}
 }
 
-void TerrainBrush::apply_end() {
+void TerrainBrush::apply_end(WorldEditContext& ctx) {
 	// do nothing if there are no active operators
 	if (!has_active_operators()) {
 		return;
 	}
-
-	WorldEditContext ctx {
-		.terrain = map->terrain,
-		.units = map->units,
-		.doodads = map->doodads,
-		.regions = map->regions,
-		.brush = this,
-		.pathing_map = map->pathing_map,
-	};
 
 	// apply all active operators
 	for (TerrainOperator& op : terrain_operators) {
@@ -273,12 +270,12 @@ void TerrainBrush::apply_end() {
 		}
 		pre_change_doodads.clear();
 		post_change_doodads.clear();
-		map->world_undo.add_undo_action(std::move(undo));
+		world_undo.add_undo_action(std::move(undo));
 	}
 
 	add_pathing_undo(ctx, updated_area);
 
-	map->terrain.update_minimap();
+	ctx.terrain.update_minimap();
 }
 
 /// Adds the undo to the current undo group
@@ -304,7 +301,7 @@ void TerrainBrush::add_terrain_undo(WorldEditContext& ctx, const TerrainRect& ar
 		}
 	}
 
-	map->world_undo.add_undo_action(std::move(undo_action));
+	world_undo.add_undo_action(std::move(undo_action));
 }
 
 void TerrainBrush::add_pathing_undo(WorldEditContext& ctx, const PathingRect& area) {
@@ -329,7 +326,7 @@ void TerrainBrush::add_pathing_undo(WorldEditContext& ctx, const PathingRect& ar
 		}
 	}
 
-	map->world_undo.add_undo_action(std::move(undo_action));
+	world_undo.add_undo_action(std::move(undo_action));
 }
 
 glm::ivec2 TerrainBrush::get_unclipped_pos() const {

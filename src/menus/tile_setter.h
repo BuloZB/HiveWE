@@ -9,6 +9,8 @@
 
 import FlowLayout;
 import Tileset;
+import Terrain;
+import MapInfo;
 import TextureButton;
 
 class TileSetter: public QDialog {
@@ -16,6 +18,10 @@ class TileSetter: public QDialog {
 
   public:
 	explicit TileSetter(QWidget* parent = nullptr);
+
+	Terrain& terrain;
+	TilesetData& tilesets;
+	MapInfo& info;
 
   private:
 	void add_tile();

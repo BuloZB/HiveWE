@@ -11,6 +11,8 @@
 
 import FlowLayout;
 import Tileset;
+import Terrain;
+import PathingMap;
 import TextureButton;
 
 struct PathingOptions {
@@ -24,6 +26,10 @@ class TilePather: public QDialog {
 
   public:
 	explicit TilePather(QWidget* parent = nullptr);
+
+	Terrain& terrain;
+	PathingMap& pathing_map;
+	TilesetData& tilesets;
 
   private:
 	void changed_tile(QAbstractButton* button);

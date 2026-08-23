@@ -6,6 +6,8 @@
 #include "region_brush.h"
 
 import QRibbon;
+import Regions;
+import Sounds;
 
 class RegionPalette : public Palette {
 	Q_OBJECT
@@ -20,6 +22,9 @@ private:
 	/// Rebuilds the region list from the map regions and syncs the list selection with the brush selection
 	void update_list();
 	void update_properties();
+
+	Regions& regions;
+	Sounds& sounds;
 
 	Ui::RegionPalette ui;
 	RegionBrush brush;

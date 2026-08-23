@@ -372,8 +372,10 @@ export struct Trigger {
 	std::string name;
 	std::string description;
 	std::string custom_text;
+	/// TODO, isn't this just in the classifier?
 	bool is_comment = false;
 	bool is_enabled = true;
+	/// TODO, isn't this just in the classifier?
 	bool is_script = false;
 	bool initially_on = true;
 	bool run_on_initialization = false;

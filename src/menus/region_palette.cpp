@@ -9,7 +9,7 @@ import MapGlobal;
 import Globals;
 import Camera;
 
-RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
+RegionPalette::RegionPalette(QWidget* parent) : Palette(parent), regions(map->regions), sounds(map->sounds), brush(map->regions, map->world_undo) {
 	ui.setupUi(this);
 	setAttribute(Qt::WA_DeleteOnClose);
 	show();
@@ -41,7 +41,7 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	}
 
 	ui.ambientSound->addItem("None", "");
-	for (const auto& sound : map->sounds.sounds) {
+	for (const auto& sound : sounds.sounds) {
 		std::string variable = sound.name;
 		if (!variable.starts_with("gg_snd_")) {
 			variable = "gg_snd_" + variable;
@@ -62,7 +62,7 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 		brush.selections.clear();
 		for (const auto& item : ui.regionList->selectedItems()) {
 			const int creation_number = item->data(Qt::UserRole).toInt();
-			for (auto& region : map->regions.regions) {
+			for (auto& region : regions.regions) {
 				if (region.creation_number == creation_number) {
 					brush.selections.emplace(&region);
 				}
@@ -73,7 +73,7 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 
 	connect(ui.regionList, &QListWidget::itemDoubleClicked, [&](QListWidgetItem* item) {
 		const int creation_number = item->data(Qt::UserRole).toInt();
-		for (const auto& region : map->regions.regions) {
+		for (const auto& region : regions.regions) {
 			if (region.creation_number == creation_number) {
 				camera.position.x = (region.left + region.right) / 2.f;
 				camera.position.y = (region.bottom + region.top) / 2.f;
@@ -101,7 +101,7 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 		// Region names have to be unique, so when the name is already taken
 		// (or applied to multiple regions at once) a number is appended
 		std::unordered_set<std::string> taken_names;
-		for (auto& region : map->regions.regions) {
+		for (auto& region : regions.regions) {
 			if (!brush.selections.contains(&region)) {
 				taken_names.emplace(region.name);
 			}
@@ -181,7 +181,7 @@ void RegionPalette::update_list() {
 	updating = true;
 
 	ui.regionList->clear();
-	for (const auto& region : map->regions.regions) {
+	for (const auto& region : regions.regions) {
 		QPixmap pixmap(16, 16);
 		pixmap.fill(QColor(region.color.r, region.color.g, region.color.b));
 

@@ -11,6 +11,7 @@
 
 import Regions;
 import RegionsUndo;
+import WorldUndoManager;
 
 class RegionBrush : public Brush {
 	Q_OBJECT
@@ -18,7 +19,10 @@ class RegionBrush : public Brush {
   public:
 	std::unordered_set<Region*> selections;
 
-	RegionBrush();
+	RegionBrush(Regions& regions, WorldUndoManager& world_undo);
+
+	Regions& regions;
+	WorldUndoManager& world_undo;
 
 	void key_press_event(QKeyEvent* event) override;
 	void mouse_press_event(QMouseEvent* event, double frame_delta) override;
@@ -28,7 +32,7 @@ class RegionBrush : public Brush {
 	void delete_selection() override;
 	void clear_selection() override;
 
-	void apply(double frame_delta) override;
+	void apply(WorldEditContext& ctx, double frame_delta) override;
 
 	void start_action();
 	void end_action();

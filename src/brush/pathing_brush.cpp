@@ -3,6 +3,7 @@
 import std;
 import <glm/glm.hpp>;
 import MapGlobal;
+import WorldUndoManager;
 import PathingUndo;
 import Camera;
 
@@ -12,26 +13,26 @@ PathingBrush::PathingBrush() : Brush() {
 	brush_type = Brush::Type::cell;
 }
 
-void PathingBrush::apply_begin() {
+void PathingBrush::apply_begin(WorldEditContext& ctx) {
 	const glm::ivec2 pos = glm::vec2(input_handler.mouse_world) * 4.f - size.x / 2.f + 0.5f;
 	const int x = pos.x;
 	const int y = pos.y;
 
-	applied_area = PathingRect(x, y, size.x, size.y).intersected({0, 0, map->pathing_map.width, map->pathing_map.height});
+	applied_area = PathingRect(x, y, size.x, size.y).intersected({0, 0, ctx.pathing_map.width, ctx.pathing_map.height});
 
 	map->world_undo.new_undo_group();
-	old_pathing_cells_static = map->pathing_map.pathing_cells_static;
+	old_pathing_cells_static = ctx.pathing_map.pathing_cells_static;
 }
 
-void PathingBrush::apply(double frame_delta) {
+void PathingBrush::apply(WorldEditContext& ctx, double frame_delta) {
 	const glm::ivec2 pos = glm::vec2(input_handler.mouse_world) * 4.f - size.x / 2.f + 0.5f;
-	const PathingRect area = PathingRect(pos.x, pos.y, size.x, size.y).intersected({0, 0, map->pathing_map.width, map->pathing_map.height});
+	const PathingRect area = PathingRect(pos.x, pos.y, size.x, size.y).intersected({0, 0, ctx.pathing_map.width, ctx.pathing_map.height});
 
 	if (area.width() <= 0 || area.height() <= 0) {
 		return;
 	}
 
-	const int offset = area.y() * map->pathing_map.width + area.x();
+	const int offset = area.y() * ctx.pathing_map.width + area.x();
 
 	for (int i = 0; i < area.width(); i++) {
 		for (int j = 0; j < area.height(); j++) {
@@ -39,17 +40,17 @@ void PathingBrush::apply(double frame_delta) {
 				continue;
 			}
 
-			const int index = offset + j * map->pathing_map.width + i;
+			const int index = offset + j * ctx.pathing_map.width + i;
 			switch (operation) {
 				case Operation::replace:
-					map->pathing_map.pathing_cells_static[index] &= ~0b00001110;
-					map->pathing_map.pathing_cells_static[index] |= brush_mask;
+					ctx.pathing_map.pathing_cells_static[index] &= ~0b00001110;
+					ctx.pathing_map.pathing_cells_static[index] |= brush_mask;
 					break;
 				case Operation::add:
-					map->pathing_map.pathing_cells_static[index] |= brush_mask;
+					ctx.pathing_map.pathing_cells_static[index] |= brush_mask;
 					break;
 				case Operation::remove:
-					map->pathing_map.pathing_cells_static[index] &= ~brush_mask;
+					ctx.pathing_map.pathing_cells_static[index] &= ~brush_mask;
 					break;
 			}
 		}
@@ -57,10 +58,10 @@ void PathingBrush::apply(double frame_delta) {
 
 	applied_area = applied_area.united(area);
 
-	map->pathing_map.upload_static_pathing();
+	ctx.pathing_map.upload_static_pathing();
 }
 
-void PathingBrush::apply_end() {
+void PathingBrush::apply_end(WorldEditContext& ctx) {
 	add_pathing_undo(applied_area);
 }
 

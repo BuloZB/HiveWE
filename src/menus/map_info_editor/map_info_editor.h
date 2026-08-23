@@ -21,6 +21,11 @@ class MapInfoEditor: public QDialog {
 
 	Ui::MapInfoEditor ui;
 
+	MapInfo& info;
+	TriggerStrings& trigger_strings;
+	Terrain& terrain;
+	TilesetData& tilesets;
+
 	void save() const;
 
   private:

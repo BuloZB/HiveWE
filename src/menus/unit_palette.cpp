@@ -16,7 +16,8 @@ import WindowHandler;
 import MapGlobal;
 import Globals;
 
-UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
+UnitPalette::UnitPalette(QWidget* parent)
+	: Palette(parent), brush(map->units, map->terrain, map->pathing_map, map->render_manager, map->world_undo) {
 	ui.setupUi(this);
 	setAttribute(Qt::WA_DeleteOnClose);
 	show();

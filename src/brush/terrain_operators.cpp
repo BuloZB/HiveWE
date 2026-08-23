@@ -3,7 +3,6 @@
 
 import std;
 import Rects;
-import MapGlobal;
 import Terrain;
 import DoodadsUndo;
 import PathingUndo;
@@ -19,15 +18,13 @@ void TerrainOperator::set_brush_type(Brush::Type type) {
 	}
 }
 
-void HeightOperator::apply_begin(const TerrainRect& area, int center_x, int center_y) {
-	auto& terrain = map->terrain;
+void HeightOperator::apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) {
 	const size_t center_idx = terrain.ci(center_x, center_y);
 	deformation_height_ground = terrain.corner_height[center_idx];
 	deformation_height_water = terrain.corner_water_height[center_idx];
 }
 
-PathingRect HeightOperator::apply(const TerrainRect& area, double frame_delta) {
-	auto& terrain = map->terrain;
+PathingRect HeightOperator::apply(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const glm::ivec2 pos = brush->get_unclipped_pos();
@@ -145,13 +142,11 @@ void HeightOperator::apply_end(WorldEditContext& ctx, const PathingRect& area) {
 	}
 }
 
-void TextureOperator::apply_begin(const TerrainRect& area, int center_x, int center_y) {
-	auto& terrain = map->terrain;
+void TextureOperator::apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) {
 	tile_index = terrain.ground_texture_to_id(tile_id);
 }
 
-PathingRect TextureOperator::apply(const TerrainRect& area, double frame_delta) {
-	auto& terrain = map->terrain;
+PathingRect TextureOperator::apply(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const glm::ivec2 pos = brush->get_unclipped_pos();
@@ -200,8 +195,7 @@ void TextureOperator::apply_end(WorldEditContext& ctx, const PathingRect& area) 
 	brush->add_terrain_undo(ctx, area.to_terrain(), TerrainUndoType::texture);
 }
 
-void CliffOperator::apply_begin(const TerrainRect& area, int center_x, int center_y) {
-	auto& terrain = map->terrain;
+void CliffOperator::apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) {
 	const size_t center_idx = terrain.ci(center_x, center_y);
 	layer_height = terrain.corner_layer_height[center_idx];
 	cliff_index = terrain.cliff_type_to_id(cliff_id);
@@ -241,8 +235,7 @@ void CliffOperator::apply_begin(const TerrainRect& area, int center_x, int cente
 	layer_height = std::clamp(layer_height, 0, 15);
 }
 
-PathingRect CliffOperator::apply_cliffs(const TerrainRect& area, double frame_delta) {
-	auto& terrain = map->terrain;
+PathingRect CliffOperator::apply_cliffs(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const glm::ivec2 pos = brush->get_unclipped_pos();
@@ -291,7 +284,7 @@ PathingRect CliffOperator::apply_cliffs(const TerrainRect& area, double frame_de
 	}
 
 	if (!cliff_seeds.empty()) {
-		check_nearby(pos.x, pos.y, cliff_seeds, expanded_area);
+		check_nearby(terrain, pos.x, pos.y, cliff_seeds, expanded_area);
 	}
 
 	// Bounds check
@@ -334,8 +327,7 @@ PathingRect CliffOperator::apply_cliffs(const TerrainRect& area, double frame_de
 	return expanded_area.to_pathing();
 }
 
-PathingRect CliffOperator::apply_ramps(const TerrainRect& area, double frame_delta) {
-	auto& terrain = map->terrain;
+PathingRect CliffOperator::apply_ramps(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const glm::ivec2 pos = brush->get_unclipped_pos();
@@ -352,7 +344,7 @@ PathingRect CliffOperator::apply_ramps(const TerrainRect& area, double frame_del
 			// create new ramps if possible
 			int horizontal = (mouse_pos.x > i) - (mouse_pos.x < i);
 			int vertical = (mouse_pos.y > j) - (mouse_pos.y < j);
-			update_ramp(i, j, horizontal, vertical, modified_area);
+			update_ramp(terrain, i, j, horizontal, vertical, modified_area);
 		}
 	}
 
@@ -366,11 +358,11 @@ PathingRect CliffOperator::apply_ramps(const TerrainRect& area, double frame_del
 	return modified_area.to_pathing().adjusted(-4, -4, 0, 0);
 }
 
-PathingRect CliffOperator::apply(const TerrainRect& area, double frame_delta) {
+PathingRect CliffOperator::apply(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	if (cliff_operation_type == cliff_operation::ramp) {
-		return apply_ramps(area, frame_delta);
+		return apply_ramps(terrain, area, frame_delta);
 	} else {
-		return apply_cliffs(area, frame_delta);
+		return apply_cliffs(terrain, area, frame_delta);
 	}
 }
 
@@ -378,8 +370,7 @@ void CliffOperator::apply_end(WorldEditContext& ctx, const PathingRect& area) {
 	brush->add_terrain_undo(ctx, area.to_terrain(), TerrainUndoType::cliff);
 }
 
-void CliffOperator::check_nearby(const int begx, const int begy, std::span<const glm::ivec2> seeds, TerrainRect& area) const {
-	auto& terrain = map->terrain;
+void CliffOperator::check_nearby(Terrain& terrain, const int begx, const int begy, std::span<const glm::ivec2> seeds, TerrainRect& area) const {
 	constexpr int max_layer_difference = 2;
 
 	std::vector<glm::ivec2> stack;
@@ -436,9 +427,8 @@ void CliffOperator::check_nearby(const int begx, const int begy, std::span<const
 	}
 }
 
-void CliffOperator::update_ramp(const int i, const int j, int horizontal, int vertical, TerrainRect& rect) {
+void CliffOperator::update_ramp(Terrain& terrain, const int i, const int j, int horizontal, int vertical, TerrainRect& rect) {
 	// note: this function expects that horizontal and vertical are -1, 0 or 1
-	auto& terrain = map->terrain;
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const size_t idx = terrain.ci(i, j);
@@ -576,11 +566,10 @@ void CliffOperator::update_ramp(const int i, const int j, int horizontal, int ve
 	);
 }
 
-void CellOperator::apply_begin(const TerrainRect& area, int center_x, int center_y) {
-	auto& terrain = map->terrain;
+void CellOperator::apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) {
 	const size_t center_idx = terrain.ci(center_x, center_y);
 
-	if (water_above_ground(center_idx)) {
+	if (water_above_ground(terrain, center_idx)) {
 		water_height = terrain.corner_water_height[center_idx];
 	} else {
 		int layer_height = terrain.corner_layer_height[center_idx];
@@ -589,8 +578,7 @@ void CellOperator::apply_begin(const TerrainRect& area, int center_x, int center
 	}
 }
 
-PathingRect CellOperator::apply(const TerrainRect& area, double frame_delta) {
-	auto& terrain = map->terrain;
+PathingRect CellOperator::apply(Terrain& terrain, const TerrainRect& area, double frame_delta) {
 	const int width = terrain.width;
 	const int height = terrain.height;
 	const glm::ivec2 pos = brush->get_unclipped_pos();
@@ -618,7 +606,7 @@ PathingRect CellOperator::apply(const TerrainRect& area, double frame_delta) {
 					terrain.corner_water_height[id] = water_height;
 				} else {
 					// if the water is not visible (below the ground), we want to incerase it's height
-					if (!water_above_ground(id)) {
+					if (!water_above_ground(terrain, id)) {
 						terrain.corner_water_height[id] = water_height;
 					}
 				}
@@ -662,8 +650,7 @@ void CellOperator::apply_end(WorldEditContext& ctx, const PathingRect& area) {
 	}
 }
 
-bool CellOperator::water_above_ground(int corner_id) const {
-	auto& terrain = map->terrain;
+bool CellOperator::water_above_ground(const Terrain& terrain, int corner_id) const {
 	return terrain.corner_water_height[corner_id]
 		> terrain.corner_layer_height[corner_id] - 2 + terrain.corner_height[corner_id] + CellOperator::WATER_GROUND_ZERO;
 }

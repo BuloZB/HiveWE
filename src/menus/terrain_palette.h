@@ -11,6 +11,7 @@
 import QRibbon;
 import FlowLayout;
 import TextureButton;
+import Terrain;
 import Tileset;
 
 class TerrainPalette: public Palette {
@@ -24,6 +25,9 @@ class TerrainPalette: public Palette {
 
   private:
 	bool event(QEvent* e) override;
+
+	Terrain& terrain;
+	TilesetData& tilesets;
 
 	Ui::TerrainPalette ui;
 

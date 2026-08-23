@@ -10,14 +10,15 @@ import OpenGLUtilities;
 import ResourceManager;
 import Globals;
 
-TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
+TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent), terrain(map->terrain), tilesets(map->tilesets),
+	  brush(map->terrain, map->units, map->tilesets, map->world_undo) {
 	ui.setupUi(this);
 
 	setAttribute(Qt::WA_DeleteOnClose);
 	show();
 
-	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
-	brush.cliff_operator.cliff_id = map->terrain.cliffset_ids.front();
+	brush.texture_operator.tile_id = terrain.tileset_ids.front();
+	brush.cliff_operator.cliff_id = terrain.cliffset_ids.front();
 
 	map->brush = &brush;
 
@@ -60,12 +61,12 @@ TerrainPalette::~TerrainPalette() {
 void TerrainPalette::refresh() {
 	create_terrain_buttons();
 
-	if (std::ranges::find(map->terrain.tileset_ids, brush.texture_operator.tile_id) == map->terrain.tileset_ids.end()) {
-		brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
+	if (std::ranges::find(terrain.tileset_ids, brush.texture_operator.tile_id) == terrain.tileset_ids.end()) {
+		brush.texture_operator.tile_id = terrain.tileset_ids.front();
 	}
 
-	if (std::ranges::find(map->terrain.cliffset_ids, brush.cliff_operator.cliff_id) == map->terrain.cliffset_ids.end()) {
-		brush.cliff_operator.cliff_id = map->terrain.cliffset_ids.front();
+	if (std::ranges::find(terrain.cliffset_ids, brush.cliff_operator.cliff_id) == terrain.cliffset_ids.end()) {
+		brush.cliff_operator.cliff_id = terrain.cliffset_ids.front();
 	}
 }
 
@@ -598,8 +599,8 @@ void TerrainPalette::create_terrain_buttons() {
 	cliff_group->setExclusive(false);
 
 	// Ground Tiles
-	for (const auto& i : map->terrain.tileset_ids) {
-		const TerrainTexture* texture = map->tilesets.terrain_texture(i);
+	for (const auto& i : terrain.tileset_ids) {
+		const TerrainTexture* texture = tilesets.terrain_texture(i);
 		if (texture) {
 			TextureButton* button = terrain_button(texture);
 
@@ -608,7 +609,7 @@ void TerrainPalette::create_terrain_buttons() {
 
 			// check if we are dealing with a cliff tile - if so, add it to cliff operator
 			if (texture->cliff_type_id) {
-				const CliffType* cliff_type = map->tilesets.cliff_type(texture->cliff_type_id.value());
+				const CliffType* cliff_type = tilesets.cliff_type(texture->cliff_type_id.value());
 
 				button = cliff_button(cliff_type, texture);
 				cliff_layout->addWidget(button);
@@ -619,7 +620,7 @@ void TerrainPalette::create_terrain_buttons() {
 
 	// add blight texture to the texture painter tool
 	// this is a small divergence from vanilla WE
-	const Tileset* tileset = map->tilesets.tileset(map->terrain.tileset_id);
+	const Tileset* tileset = tilesets.tileset(terrain.tileset_id);
 	TextureButton* blight_button = terrain_button(nullptr);
 	blight_button->create_blight_icon(tileset);
 	blight_button->setToolTip(QString::fromStdString(world_edit_strings.data("WorldEditStrings", "WESTRING_BLIGHT")));
