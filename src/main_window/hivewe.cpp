@@ -22,8 +22,8 @@ import "region_palette.h";
 import "object_editor/object_editor.h";
 import "model_editor/model_editor.h";
 import "tile_setter.h";
-import "map_info_editor.h";
 import "scenario_info_editor.h";
+import "map_info_editor/map_info_editor.h";
 import "terrain_palette.h";
 import "settings_editor.h";
 import "map_protection_dialog.h";
@@ -209,40 +209,51 @@ HiveWE::HiveWE(QWidget* parent) : QMainWindow(parent) {
 	});
 
 	connect(ui.ribbon->change_tileset, &QRibbonButton::clicked, [this]() {
-		new TileSetter(this);
+		bool created = false;
+		window_handler.create_or_raise<TileSetter>(this, created);
 	});
 	connect(ui.ribbon->change_tile_pathing, &QRibbonButton::clicked, [this]() {
-		new TilePather(this);
+		bool created = false;
+		window_handler.create_or_raise<TilePather>(this, created);
 	});
 
-	connect(ui.ribbon->map_description, &QRibbonButton::clicked, [&]() {
-		(new MapInfoEditor(this))->ui.tabs->setCurrentIndex(0);
+	connect(ui.ribbon->map_description, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<MapInfoEditor>(this, created)->ui.tabs->setCurrentIndex(0);
 	});
-	connect(ui.ribbon->map_loading_screen, &QRibbonButton::clicked, [&]() {
-		(new MapInfoEditor(this))->ui.tabs->setCurrentIndex(3);
+	connect(ui.ribbon->map_loading_screen, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<MapInfoEditor>(this, created)->ui.tabs->setCurrentIndex(3);
 	});
-	connect(ui.ribbon->map_options, &QRibbonButton::clicked, [&]() {
-		(new MapInfoEditor(this))->ui.tabs->setCurrentIndex(1);
+	connect(ui.ribbon->map_options, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<MapInfoEditor>(this, created)->ui.tabs->setCurrentIndex(1);
 	});
 	// connect(ui, &QAction::triggered, [&]() { (new MapInfoEditor(this))->ui.tabs->setCurrentIndex(3); });
 
-	connect(ui.ribbon->player_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(0);
+	connect(ui.ribbon->player_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(0);
 	});
-	connect(ui.ribbon->ally_priorities_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(1);
+	connect(ui.ribbon->ally_priorities_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(1);
 	});
-	connect(ui.ribbon->force_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(2);
+	connect(ui.ribbon->force_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(2);
 	});
-	connect(ui.ribbon->techtree_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(3);
+	connect(ui.ribbon->techtree_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(3);
 	});
-	connect(ui.ribbon->ability_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(4);
+	connect(ui.ribbon->ability_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(4);
 	});
-	connect(ui.ribbon->upgrade_properties, &QRibbonButton::clicked, [&]() {
-		(new ScenarioInfoEditor(this))->ui.tabs->setCurrentIndex(5);
+	connect(ui.ribbon->upgrade_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioInfoEditor>(this, created)->ui.tabs->setCurrentIndex(5);
 	});
 
 	connect(new QShortcut(QKeySequence(Qt::Key_T), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, [&]() {

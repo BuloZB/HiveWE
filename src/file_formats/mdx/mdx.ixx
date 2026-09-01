@@ -80,7 +80,10 @@ namespace mdx {
 		KFC3 = '3CFK',
 		KFCA = 'ACFK',
 		KFTC = 'CTFK',
-		KMTE = 'ETMK'
+		KMTE = 'ETMK',
+		KPPA = 'APPK',
+		KPPE = 'EPPK',
+		KPPV = 'VPPK'
 	};
 
 	enum class ChunkTag {
@@ -102,7 +105,7 @@ namespace mdx {
 		EVTS = 'STVE',
 		CLID = 'DILC',
 		CORN = 'NROC',
-		SNDS = 'SDNS',
+		SNDS = 'SDNS', // Not used by any game files in 2.1, possibly earlier
 		TXAN = 'NAXT',
 		BPOS = 'SOPB',
 		FAFX = 'XFAF',
@@ -145,7 +148,8 @@ namespace mdx {
 			global_sequence_ID = reader.read<int32_t>();
 			id = track_id;
 
-			tracks.reserve(tracks_count);
+			const size_t max_tracks = static_cast<size_t>(reader.remaining()) / (sizeof(int32_t) + sizeof(T));
+			tracks.reserve(std::min<size_t>(tracks_count, max_tracks));
 			for (size_t i = 0; i < tracks_count; i++) {
 				Track<T> track;
 				track.frame = reader.read<int32_t>();
@@ -224,12 +228,13 @@ namespace mdx {
 		enum ShadingFlags {
 			unshaded = 1,
 			sphere_environment_map = 2,
-			unknown1 = 4,
-			unknown2 = 8,
+			wrap_width = 4, /// Identical to the relevant texture field or does this take precedence?
+			wrap_height = 8, /// Identical to the relevant texture field or does this take precedence?
 			two_sided = 16,
 			unfogged = 32,
 			no_depth_test = 64,
-			no_depth_set = 128
+			no_depth_set = 128,
+			unlit = 256
 		};
 
 		bool operator==(const Layer&) const = default;
@@ -308,6 +313,7 @@ namespace mdx {
 			/// if_particle_emitter : emitter_uses_tga,
 			sort_primitives_far_z = 0x10000,
 			line_emitter = 0x20000,
+			/// if_popcorn : popcorn_scaling,
 			unfogged = 0x40000,
 			model_space = 0x80000,
 			xy_quad = 0x100000
@@ -315,9 +321,9 @@ namespace mdx {
 	};
 
 	export struct Extent {
-		float bounds_radius;
-		glm::vec3 minimum;
-		glm::vec3 maximum;
+		float bounds_radius = 0.f;
+		glm::vec3 minimum = glm::vec3(0.f);
+		glm::vec3 maximum = glm::vec3(0.f);
 
 		Extent() = default;
 
@@ -411,6 +417,8 @@ namespace mdx {
 
 		enum Flags {
 			constant_color = 0x1,
+			two_sided = 0x2,
+			unknown = 0x4, /// Not set or named in any of the game files
 			sort_primitives_near_z = 0x8,
 			sort_primitives_far_z = 0x10,
 			full_resolution = 0x20
@@ -593,7 +601,7 @@ namespace mdx {
 		TrackHeader<float> KRAL; // Alpha
 		TrackHeader<glm::vec3> KRCO; // Color
 		TrackHeader<uint32_t> KRTX; // Texture slot
-		TrackHeader<float> KRVS; // Visibility
+		TrackHeader<float> KRVS; // Visibility, has no static equivalent
 	};
 
 	/*
@@ -693,11 +701,22 @@ namespace mdx {
 		fs::path path; /// FaceFX effect file
 	};
 
-	/// PopcornFX emitter. We keep its payload opaque and re-emit it verbatim.
-	/// The debug leak that happened accidentally in 2025 revealed the info needed to reverse engineer PopcornFX
+	/// PopcornFX emitter
 	struct CornEmitter {
 		Node node;
-		std::vector<uint8_t> data; /// Just store it so we can save it again
+		float life_span;
+		float emission_rate;
+		float speed;
+		glm::vec3 color;
+		float alpha;
+		uint32_t replaceable_id; // Non-zero replaces path, like Texture
+		std::string path; // The .pkfx to spawn
+		/// Which sequences the effect plays in, e.g. "Always=off, Death=on"
+		std::string anim_visibility_guide;
+
+		TrackHeader<float> KPPA; // Alpha
+		TrackHeader<float> KPPE; // Emission rate
+		TrackHeader<float> KPPV; // Visibility
 	};
 
 	/// A camera with a position, look-at target, and lens settings.
@@ -821,6 +840,7 @@ namespace mdx {
 
 		MDX& calculate_extents();
 
+		/// Visits every node in the order their chunks appear in an MDX file
 		template<std::invocable<Node&> Func>
 		void for_each_node(const Func F) {
 			for (auto& i : bones) {
@@ -847,6 +867,10 @@ namespace mdx {
 				F(i.node);
 			}
 
+			for (auto& i : corn_emitters) {
+				F(i.node);
+			}
+
 			for (auto& i : ribbons) {
 				F(i.node);
 			}
@@ -856,10 +880,6 @@ namespace mdx {
 			}
 
 			for (auto& i : collision_shapes) {
-				F(i.node);
-			}
-
-			for (auto& i : corn_emitters) {
 				F(i.node);
 			}
 		}
@@ -886,14 +906,22 @@ namespace mdx {
 			for (auto& i : emitters1) {
 				F(i.KPEE);
 				F(i.KPEG);
+				F(i.KPLN);
+				F(i.KPLT);
+				F(i.KPEL);
+				F(i.KPES);
+				F(i.KPEV);
 			}
 
 			for (auto& i : emitters2) {
-				F(i.KP2E);
-				F(i.KP2G);
+				F(i.KP2S);
 				F(i.KP2R);
-				F(i.KP2W);
+				F(i.KP2L);
+				F(i.KP2G);
+				F(i.KP2E);
 				F(i.KP2N);
+				F(i.KP2W);
+				F(i.KP2V);
 			}
 
 			for (auto& i : materials) {
@@ -938,6 +966,100 @@ namespace mdx {
 				F(i.KTAT);
 				F(i.KTAR);
 				F(i.KTAS);
+			}
+		}
+
+		/// Like for_each_track, but visits every track the format has and tells the callback which
+		/// object and which chunk each one came from, so diagnostics can name their source.
+		/// for_each_track is missing a handful of emitter tracks; this one is the complete set.
+		template<typename Func>
+			requires std::invocable<Func, TrackHeader<float>&, std::string_view, const char*>
+			and std::invocable<Func, TrackHeader<uint32_t>&, std::string_view, const char*>
+			and std::invocable<Func, TrackHeader<glm::vec3>&, std::string_view, const char*>
+			and std::invocable<Func, TrackHeader<glm::quat>&, std::string_view, const char*>
+		void for_each_track_labelled(const Func F) {
+			for_each_node([&](Node& node) {
+				F(node.KGRT, node.name, "KGRT");
+				F(node.KGTR, node.name, "KGTR");
+				F(node.KGSC, node.name, "KGSC");
+			});
+
+			for (size_t i = 0; i < animations.size(); i++) {
+				const std::string label = std::format("Geoset animation {}", i);
+				F(animations[i].KGAC, label, "KGAC");
+				F(animations[i].KGAO, label, "KGAO");
+			}
+
+			for (auto& i : attachments) {
+				F(i.KATV, i.node.name, "KATV");
+			}
+
+			for (auto& i : emitters1) {
+				F(i.KPEE, i.node.name, "KPEE");
+				F(i.KPEG, i.node.name, "KPEG");
+				F(i.KPLN, i.node.name, "KPLN");
+				F(i.KPLT, i.node.name, "KPLT");
+				F(i.KPEL, i.node.name, "KPEL");
+				F(i.KPES, i.node.name, "KPES");
+				F(i.KPEV, i.node.name, "KPEV");
+			}
+
+			for (auto& i : emitters2) {
+				F(i.KP2S, i.node.name, "KP2S");
+				F(i.KP2R, i.node.name, "KP2R");
+				F(i.KP2L, i.node.name, "KP2L");
+				F(i.KP2G, i.node.name, "KP2G");
+				F(i.KP2E, i.node.name, "KP2E");
+				F(i.KP2N, i.node.name, "KP2N");
+				F(i.KP2W, i.node.name, "KP2W");
+				F(i.KP2V, i.node.name, "KP2V");
+			}
+
+			for (size_t i = 0; i < materials.size(); i++) {
+				for (size_t j = 0; j < materials[i].layers.size(); j++) {
+					auto& layer = materials[i].layers[j];
+					const std::string label = std::format("Material {} layer {}", i, j);
+					F(layer.KMTA, label, "KMTA");
+					F(layer.KMTE, label, "KMTE");
+					F(layer.KFC3, label, "KFC3");
+					F(layer.KFCA, label, "KFCA");
+					F(layer.KFTC, label, "KFTC");
+					for (auto& k : layer.textures) {
+						F(k.KMTF, label, "KMTF");
+					}
+				}
+			}
+
+			for (auto& i : lights) {
+				F(i.KLAS, i.node.name, "KLAS");
+				F(i.KLAE, i.node.name, "KLAE");
+				F(i.KLAC, i.node.name, "KLAC");
+				F(i.KLAI, i.node.name, "KLAI");
+				F(i.KLBI, i.node.name, "KLBI");
+				F(i.KLBC, i.node.name, "KLBC");
+				F(i.KLAV, i.node.name, "KLAV");
+			}
+
+			for (auto& i : ribbons) {
+				F(i.KRHA, i.node.name, "KRHA");
+				F(i.KRHB, i.node.name, "KRHB");
+				F(i.KRAL, i.node.name, "KRAL");
+				F(i.KRCO, i.node.name, "KRCO");
+				F(i.KRTX, i.node.name, "KRTX");
+				F(i.KRVS, i.node.name, "KRVS");
+			}
+
+			for (auto& i : cameras) {
+				F(i.KCTR, i.name, "KCTR");
+				F(i.KTTR, i.name, "KTTR");
+				F(i.KCRL, i.name, "KCRL");
+			}
+
+			for (size_t i = 0; i < texture_animations.size(); i++) {
+				const std::string label = std::format("Texture animation {}", i);
+				F(texture_animations[i].KTAT, label, "KTAT");
+				F(texture_animations[i].KTAR, label, "KTAR");
+				F(texture_animations[i].KTAS, label, "KTAS");
 			}
 		}
 	};

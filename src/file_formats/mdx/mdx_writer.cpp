@@ -639,7 +639,18 @@ namespace mdx {
 			writer.write<uint32_t>(0);
 
 			corn.node.save(writer);
-			writer.write_vector(corn.data);
+			writer.write<float>(corn.life_span);
+			writer.write<float>(corn.emission_rate);
+			writer.write<float>(corn.speed);
+			writer.write<glm::vec3>(corn.color);
+			writer.write<float>(corn.alpha);
+			writer.write<uint32_t>(corn.replaceable_id);
+			writer.write_c_string_padded(corn.path, 260);
+			writer.write_c_string_padded(corn.anim_visibility_guide, 260);
+
+			corn.KPPA.save(TrackTag::KPPA, writer);
+			corn.KPPE.save(TrackTag::KPPE, writer);
+			corn.KPPV.save(TrackTag::KPPV, writer);
 
 			const uint32_t temporary = writer.buffer.size() - corn_index;
 			std::memcpy(writer.buffer.data() + corn_index, &temporary, 4);
@@ -758,11 +769,11 @@ namespace mdx {
 		write_PIVT(writer, *this);
 		write_PREM(writer, *this);
 		write_PRE2(writer, *this);
+		write_CORN(writer, *this);
 		write_RIBB(writer, *this);
 		write_CAMS(writer, *this);
 		write_EVTS(writer, *this);
 		write_CLID(writer, *this);
-		write_CORN(writer, *this);
 		write_FAFX(writer, *this);
 		write_BPOS(writer, *this);
 		write_TXAN(writer, *this);

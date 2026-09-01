@@ -26,11 +26,12 @@ import MapGlobal;
 
 constexpr int map_header_id = 0;
 
-TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent) {
+TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent), triggers(map->triggers) {
 	ui.setupUi(this);
 	setAttribute(Qt::WA_DeleteOnClose);
 
-	model = new TreeModel(explorer);
+	explorer = new TriggerExplorer(triggers);
+	model = new TreeModel(triggers, explorer);
 	explorer->setModel(model);
 	explorer->expandToDepth(1);
 
@@ -87,7 +88,7 @@ TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent) {
 		if (map->info.lua) {
 			mode = ScriptMode::lua;
 		}
-		const auto result = map->triggers.generate_map_script(
+		const auto result = triggers.generate_map_script(
 			map->terrain,
 			map->units,
 			map->doodads,
@@ -110,7 +111,7 @@ TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent) {
 	connect(ui.actionCreateComment, &QAction::triggered, explorer, &TriggerExplorer::createComment);
 
 	connect(explorer, &QTreeView::doubleClicked, this, &TriggerEditor::item_clicked);
-	connect(explorer, &TriggerExplorer::itemAboutToBeDeleted, [&](TreeItem* item) {
+	connect(explorer, &TriggerExplorer::itemAboutToBeDeleted, [&](const TreeItem* item) {
 		if (auto found = dock_manager->findDockWidget(QString::number(item->id)); found) {
 			found->closeDockWidget();
 		}
@@ -166,7 +167,7 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 		if (item->id == 0) { // Map header
 			JassEditor* jass_editor = new JassEditor;
 			jass_editor->setObjectName("jass_editor");
-			jass_editor->setText(QString::fromStdString(map->triggers.global_jass));
+			jass_editor->setText(QString::fromStdString(triggers.global_jass));
 
 			dock_tab->setWindowTitle("Map Header");
 			dock_tab->setObjectName("0");
@@ -177,12 +178,12 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 				comments_editor->setObjectName("comments");
 				comments_editor->setPlaceholderText("Optional comments here");
 				splitter->addWidget(comments_editor);
-				comments_editor->setPlainText(QString::fromStdString(map->triggers.global_jass_comment));
+				comments_editor->setPlainText(QString::fromStdString(triggers.global_jass_comment));
 			}
 
 			splitter->addWidget(jass_editor);
 		} else {
-			const Trigger& trigger = *std::ranges::find_if(map->triggers.triggers, [item](const Trigger& trigger) {
+			const Trigger& trigger = *std::ranges::find_if(triggers.triggers, [item](const Trigger& trigger) {
 				return trigger.id == item->id;
 			});
 
@@ -219,7 +220,7 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 		splitter->setStretchFactor(1, 7);
 		dock_tab->setWidget(splitter);
 	} else if (item->type == Classifier::variable) {
-		TriggerVariable& variable = *std::ranges::find_if(map->triggers.variables, [item](const TriggerVariable& i) {
+		TriggerVariable& variable = *std::ranges::find_if(triggers.variables, [item](const TriggerVariable& i) {
 			return i.id == item->id;
 		});
 
@@ -229,7 +230,7 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 		edit->setObjectName("var_editor");
 		dock_tab->setWidget(edit);
 	} else if (item->type == Classifier::comment) {
-		Trigger& trigger = *std::ranges::find_if(map->triggers.triggers, [item](const Trigger& trigger) {
+		const Trigger& trigger = *std::ranges::find_if(triggers.triggers, [item](const Trigger& trigger) {
 			return trigger.id == item->id;
 		});
 
@@ -251,7 +252,7 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 	dock_manager->addDockWidget(ads::CenterDockWidgetArea, dock_tab, dock_area);
 }
 
-void TriggerEditor::save_tab(ads::CDockWidget* tab) {
+void TriggerEditor::save_tab(const ads::CDockWidget* tab) {
 	const int trigger_id = tab->objectName().toInt();
 
 	if (trigger_id < 0) {
@@ -262,9 +263,9 @@ void TriggerEditor::save_tab(ads::CDockWidget* tab) {
 	auto comments = tab->findChild<QPlainTextEdit*>("comments");
 	if (comments) {
 		if (trigger_id == map_header_id) {
-			map->triggers.global_jass_comment = comments->toPlainText().toStdString();
+			triggers.global_jass_comment = comments->toPlainText().toStdString();
 		} else {
-			Trigger& trigger = *std::ranges::find_if(map->triggers.triggers, [trigger_id](const Trigger& trigger) {
+			Trigger& trigger = *std::ranges::find_if(triggers.triggers, [trigger_id](const Trigger& trigger) {
 				return trigger.id == trigger_id;
 			});
 
@@ -276,9 +277,9 @@ void TriggerEditor::save_tab(ads::CDockWidget* tab) {
 	auto jass_editor = tab->findChild<JassEditor*>("jass_editor");
 	if (jass_editor) {
 		if (trigger_id == map_header_id) {
-			map->triggers.global_jass = jass_editor->text().toStdString();
+			triggers.global_jass = jass_editor->text().toStdString();
 		} else {
-			Trigger& trigger = *std::ranges::find_if(map->triggers.triggers, [trigger_id](const Trigger& trigger) {
+			Trigger& trigger = *std::ranges::find_if(triggers.triggers, [trigger_id](const Trigger& trigger) {
 				return trigger.id == trigger_id;
 			});
 
@@ -289,7 +290,7 @@ void TriggerEditor::save_tab(ads::CDockWidget* tab) {
 	// Variable editor
 	auto var_editor = tab->findChild<VariableEditor*>("var_editor");
 	if (var_editor) {
-		TriggerVariable& variable = *std::ranges::find_if(map->triggers.variables, [trigger_id](const TriggerVariable& i) {
+		TriggerVariable& variable = *std::ranges::find_if(triggers.variables, [trigger_id](const TriggerVariable& i) {
 			return i.id == trigger_id;
 		});
 
@@ -323,23 +324,23 @@ void TriggerEditor::show_gui_trigger(QTreeWidget* edit, const Trigger& trigger) 
 
 		switch (i.type) {
 			case ECA::Type::event:
-				string_parameters = map->triggers.trigger_data.whole_data("TriggerEvents", "_" + i.name + "_Parameters");
-				category = map->triggers.trigger_data.data("TriggerEvents", "_" + i.name + "_Category");
+				string_parameters = triggers.trigger_data.whole_data("TriggerEvents", "_" + i.name + "_Parameters");
+				category = triggers.trigger_data.data("TriggerEvents", "_" + i.name + "_Category");
 				break;
 			case ECA::Type::condition:
-				string_parameters = map->triggers.trigger_data.whole_data("TriggerConditions", "_" + i.name + "_Parameters");
-				category = map->triggers.trigger_data.data("TriggerConditions", "_" + i.name + "_Category");
+				string_parameters = triggers.trigger_data.whole_data("TriggerConditions", "_" + i.name + "_Parameters");
+				category = triggers.trigger_data.data("TriggerConditions", "_" + i.name + "_Category");
 				break;
 			case ECA::Type::action:
-				string_parameters = map->triggers.trigger_data.whole_data("TriggerActions", "_" + i.name + "_Parameters");
-				category = map->triggers.trigger_data.data("TriggerActions", "_" + i.name + "_Category");
+				string_parameters = triggers.trigger_data.whole_data("TriggerActions", "_" + i.name + "_Parameters");
+				category = triggers.trigger_data.data("TriggerActions", "_" + i.name + "_Category");
 				break;
 		}
 
 		eca->setText(0, QString::fromStdString(get_parameters_names(string_parameters, i.parameters)));
 
 		if (auto found = trigger_icons.find(category); found == trigger_icons.end()) {
-			const std::string icon_path = map->triggers.trigger_data.data("TriggerCategories", category, 1);
+			const std::string icon_path = triggers.trigger_data.data("TriggerCategories", category, 1);
 			const std::string final_path = icon_path + ".dds";
 			const QIcon icon = texture_to_icon(final_path);
 			trigger_icons[category] = icon;
@@ -409,26 +410,26 @@ std::string TriggerEditor::get_parameters_names(
 			switch (j.sub_parameter.type) {
 				case ECA::Type::event:
 					sub_string_parameters =
-						map->triggers.trigger_data.whole_data("TriggerEvents", "_" + j.sub_parameter.name + "_Parameters");
+						triggers.trigger_data.whole_data("TriggerEvents", "_" + j.sub_parameter.name + "_Parameters");
 					break;
 				case ECA::Type::condition:
 					sub_string_parameters =
-						map->triggers.trigger_data.whole_data("TriggerConditions", "_" + j.sub_parameter.name + "_Parameters");
+						triggers.trigger_data.whole_data("TriggerConditions", "_" + j.sub_parameter.name + "_Parameters");
 					break;
 				case ECA::Type::action:
 					sub_string_parameters =
-						map->triggers.trigger_data.whole_data("TriggerActions", "_" + j.sub_parameter.name + "_Parameters");
+						triggers.trigger_data.whole_data("TriggerActions", "_" + j.sub_parameter.name + "_Parameters");
 					break;
 				case ECA::Type::call:
 					sub_string_parameters =
-						map->triggers.trigger_data.whole_data("TriggerCalls", "_" + j.sub_parameter.name + "_Parameters");
+						triggers.trigger_data.whole_data("TriggerCalls", "_" + j.sub_parameter.name + "_Parameters");
 					break;
 			}
 			result += "(" + get_parameters_names(sub_string_parameters, j.sub_parameter.parameters) + ")";
 		} else {
 			switch (j.type) {
 				case TriggerParameter::Type::preset:
-					result += map->triggers.trigger_data.data("TriggerParams", j.value, 3);
+					result += triggers.trigger_data.data("TriggerParams", j.value, 3);
 					break;
 				case TriggerParameter::Type::string: {
 					std::string pre_result;
@@ -460,7 +461,7 @@ std::string TriggerEditor::get_parameters_names(
 						result += units_slk.data("name", type);
 						result += " " + instance;
 					} else {
-						//std::string type = map->triggers.variables[j.value].type;
+						//std::string type = triggers.variables[j.value].type;
 						//if (type == "unit") {
 						//std::cout << "test\n";
 						//} else {

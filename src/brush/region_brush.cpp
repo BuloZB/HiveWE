@@ -9,7 +9,8 @@ import Globals;
 import MapGlobal;
 import <glm/glm.hpp>;
 
-RegionBrush::RegionBrush() : Brush() {
+RegionBrush::RegionBrush(Regions& regions, WorldUndoManager& world_undo)
+	: Brush(), regions(regions), world_undo(world_undo) {
 	// Make the ground projected brush square invisible as regions are drawn by the terrain shaders
 	brush_color = {0, 0, 0, 0};
 	set_shape(shape);
@@ -75,7 +76,7 @@ std::vector<Region*> RegionBrush::regions_under() const {
 
 	const glm::vec2 position = input_handler.mouse_world;
 	// In reverse so the topmost (drawn last) region comes first
-	for (auto& region : map->regions.regions | std::views::reverse) {
+	for (auto& region : regions.regions | std::views::reverse) {
 		const float left = std::min(region.left, region.right);
 		const float right = std::max(region.left, region.right);
 		const float bottom = std::min(region.bottom, region.top);
@@ -92,8 +93,8 @@ std::vector<Region*> RegionBrush::regions_under() const {
 void RegionBrush::key_press_event(QKeyEvent* event) {
 	if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_A) {
 		selections.clear();
-		selections.reserve(map->regions.regions.size());
-		for (auto& region : map->regions.regions) {
+		selections.reserve(regions.regions.size());
+		for (auto& region : regions.regions) {
 			selections.emplace(&region);
 		}
 		emit selection_changed();
@@ -120,15 +121,15 @@ void RegionBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 			region.right = start.x;
 			region.bottom = start.y;
 			region.top = start.y;
-			region.name = map->regions.get_unique_name();
-			region.creation_number = map->regions.get_unique_creation_number();
+			region.name = regions.get_unique_name();
+			region.creation_number = regions.get_unique_creation_number();
 			region.color = region_preset_colors[region.creation_number % region_preset_colors.size()];
 
-			map->regions.regions.push_back(region);
+			regions.regions.push_back(region);
 
 			creating = true;
 			resizing = true;
-			resize_region = &map->regions.regions.back();
+			resize_region = &regions.regions.back();
 			resize_edges = { .right = true, .top = true };
 
 			emit regions_changed();
@@ -254,7 +255,7 @@ void RegionBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 			const glm::vec2 high = glm::max(glm::vec2(selection_start), glm::vec2(input_handler.mouse_world));
 
 			std::unordered_set<Region*> query;
-			for (auto& region : map->regions.regions) {
+			for (auto& region : regions.regions) {
 				const float left = std::min(region.left, region.right);
 				const float right = std::max(region.left, region.right);
 				const float bottom = std::min(region.bottom, region.top);
@@ -299,8 +300,8 @@ void RegionBrush::mouse_release_event(QMouseEvent* event) {
 
 			auto undo = std::make_unique<RegionAddAction>();
 			undo->regions.push_back(region);
-			map->world_undo.new_undo_group();
-			map->world_undo.add_undo_action(std::move(undo));
+			world_undo.new_undo_group();
+			world_undo.add_undo_action(std::move(undo));
 
 			emit regions_changed();
 		} else if (dragging || resizing) {
@@ -338,15 +339,15 @@ void RegionBrush::delete_selection() {
 	}
 
 	auto undo = std::make_unique<RegionDeleteAction>();
-	for (size_t i = 0; i < map->regions.regions.size(); i++) {
-		if (selections.contains(&map->regions.regions[i])) {
-			undo->regions.emplace_back(i, map->regions.regions[i]);
+	for (size_t i = 0; i < regions.regions.size(); i++) {
+		if (selections.contains(&regions.regions[i])) {
+			undo->regions.emplace_back(i, regions.regions[i]);
 		}
 	}
-	map->world_undo.new_undo_group();
-	map->world_undo.add_undo_action(std::move(undo));
+	world_undo.new_undo_group();
+	world_undo.add_undo_action(std::move(undo));
 
-	map->regions.remove_regions(selections);
+	regions.remove_regions(selections);
 
 	selections.clear();
 	emit selection_changed();
@@ -356,7 +357,7 @@ void RegionBrush::delete_selection() {
 void RegionBrush::clear_selection() {
 	// Cancel an in-progress creation drag (Escape, mode switches and undo/redo end up here)
 	if (creating && resize_region) {
-		map->regions.remove_region(resize_region);
+		regions.remove_region(resize_region);
 		creating = false;
 		emit regions_changed();
 	}
@@ -370,12 +371,12 @@ void RegionBrush::clear_selection() {
 	emit selection_changed();
 }
 
-void RegionBrush::apply(double frame_delta) {
+void RegionBrush::apply(WorldEditContext& ctx, double frame_delta) {
 	// Regions are created in the mouse handlers as they are drawn by dragging out a rectangle
 }
 
 void RegionBrush::start_action() {
-	map->world_undo.new_undo_group();
+	world_undo.new_undo_group();
 	state_undo = std::make_unique<RegionStateAction>();
 	for (const auto& region : selections) {
 		state_undo->old_regions.push_back(*region);
@@ -386,5 +387,5 @@ void RegionBrush::end_action() {
 	for (const auto& region : selections) {
 		state_undo->new_regions.push_back(*region);
 	}
-	map->world_undo.add_undo_action(std::move(state_undo));
+	world_undo.add_undo_action(std::move(state_undo));
 }

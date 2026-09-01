@@ -22,9 +22,9 @@ class PathingBrush: public Brush {
 
 	PathingBrush();
 
-	void apply_begin() override;
-	void apply(double frame_delta) override;
-	void apply_end() override;
+	void apply_begin(WorldEditContext& ctx) override;
+	void apply(WorldEditContext& ctx, double frame_delta) override;
+	void apply_end(WorldEditContext& ctx) override;
 
 	void add_pathing_undo(const PathingRect& area);
 

@@ -100,7 +100,9 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/utilities.ixx"
 	"utilities/opengl_utilities.ixx"
 	"utilities/modification_tables.ixx"
+	"utilities/string_hash.ixx"
 	"utilities/unordered_map.ixx"
+	"utilities/unordered_set.ixx"
 	"utilities/no_init_allocator.ixx"
 	"utilities/math_operations.ixx"
 	"utilities/rects.ixx"
@@ -138,7 +140,11 @@ target_sources(HiveWE_lib PRIVATE
 
 
 	"menus/doodad_palette.cpp"
-	"menus/map_info_editor.cpp"
+	"menus/map_info_editor/map_info_editor.cpp"
+	"menus/map_info_editor/description.cpp"
+	"menus/map_info_editor/loading_screen.cpp"
+	"menus/map_info_editor/options.cpp"
+	"menus/map_info_editor/map_size.cpp"
 	"menus/scenario_info_editor.cpp"
 	"menus/map_protection_dialog.cpp"
 	"menus/map_protection_dialog.h"

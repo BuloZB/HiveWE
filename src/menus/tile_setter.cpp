@@ -13,7 +13,8 @@ import Globals;
 import Texture;
 import <glm/glm.hpp>;
 
-TileSetter::TileSetter(QWidget* parent) : QDialog(parent) {
+TileSetter::TileSetter(QWidget* parent)
+	: QDialog(parent), terrain(map->terrain), tilesets(map->tilesets), info(map->info) {
 	ui.setupUi(this);
 
 	setAttribute(Qt::WA_DeleteOnClose);
@@ -37,8 +38,8 @@ TileSetter::TileSetter(QWidget* parent) : QDialog(parent) {
 	ui.availableScrollAreaContent->setLayout(available_layout);
 
 	// create icons for current terrain textures
-	for (const auto& i : map->terrain.tileset_ids) {
-		const TerrainTexture* texture = map->tilesets.terrain_texture(i);
+	for (const auto& i : terrain.tileset_ids) {
+		const TerrainTexture* texture = tilesets.terrain_texture(i);
 		if (!texture) {
 			continue;
 		}
@@ -50,7 +51,7 @@ TileSetter::TileSetter(QWidget* parent) : QDialog(parent) {
 	}
 
 	// add tilesets to dropdown menus
-	for (const auto& [key, tileset] : map->tilesets.tilesets()) {
+	for (const auto& [key, tileset] : tilesets.tilesets()) {
 		ui.tileset->addItem(QString::fromStdString(tileset.name), QString(QChar(key)));
 		ui.baseTileset->addItem(QString::fromStdString(tileset.name), QString(QChar(key)));
 	}
@@ -59,7 +60,7 @@ TileSetter::TileSetter(QWidget* parent) : QDialog(parent) {
 	ui.tileset->addItem("Cliff Base Tiles", "c");
 
 	// update base tileset initial value
-	int index = ui.baseTileset->findData(QString(map->terrain.tileset_id));
+	int index = ui.baseTileset->findData(QString(terrain.tileset_id));
 	if (index >= 0) {
 		ui.baseTileset->setCurrentIndex(index);
 	}
@@ -191,7 +192,7 @@ void TileSetter::reset_to_default() {
 		return;
 	}
 
-	const Tileset* tileset = map->tilesets.tileset(ui.baseTileset->currentData().toString().at(0).toLatin1());
+	const Tileset* tileset = tilesets.tileset(ui.baseTileset->currentData().toString().at(0).toLatin1());
 	if (!tileset) {
 		return;
 	}
@@ -204,7 +205,7 @@ void TileSetter::reset_to_default() {
 	}
 
 	for (const auto& tex_id : tileset->terrain_textures) {
-		const TerrainTexture* tex = map->tilesets.terrain_texture(tex_id);
+		const TerrainTexture* tex = tilesets.terrain_texture(tex_id);
 		if (!tex) {
 			continue;
 		}
@@ -252,7 +253,7 @@ void TileSetter::update_available_tiles() {
 
 	const std::string tileset = ui.tileset->currentData().toString().toStdString();
 
-	for (const auto& [tex_id, texture] : map->tilesets.terrain_textures()) {
+	for (const auto& [tex_id, texture] : tilesets.terrain_textures()) {
 		if (tex_id.front() != tileset.front()) {
 			continue;
 		}
@@ -297,9 +298,9 @@ void TileSetter::save_tiles() {
 		new_terrain_textures.push_back(btn->texture()->id);
 	}
 
-	from_to_id.resize(map->terrain.tileset_ids.size());
-	for (size_t i = 0; i < map->terrain.tileset_ids.size(); i++) {
-		const std::string from_id = map->terrain.tileset_ids[i];
+	from_to_id.resize(terrain.tileset_ids.size());
+	for (size_t i = 0; i < terrain.tileset_ids.size(); i++) {
+		const std::string from_id = terrain.tileset_ids[i];
 
 		const auto found = std::ranges::find(new_terrain_textures, from_id);
 		if (found != new_terrain_textures.end()) {
@@ -315,6 +316,6 @@ void TileSetter::save_tiles() {
 	}
 
 	const char new_tileset = ui.baseTileset->currentData().toString().toStdString()[0];
-	map->terrain.change_tileset(new_terrain_textures, from_to_id, new_tileset, map->tilesets, map->info);
+	terrain.change_tileset(new_terrain_textures, from_to_id, new_tileset, tilesets, info);
 	close();
 }

@@ -5,6 +5,8 @@ import Camera;
 import OpenGLUtilities;
 import ResourceManager;
 import Globals;
+import MapGlobal;
+import WorldUndoManager;
 import <glad/glad.h>;
 import <glm/glm.hpp>;
 import <glm/gtc/matrix_transform.hpp>;
@@ -81,6 +83,11 @@ void Brush::set_shape(const Shape new_shape) {
 
 /// Whether the brush shape contains the point, Arguments in brush coordinates
 bool Brush::contains(const glm::ivec2 pos) const {
+	const glm::ivec2 extent = size / size_granularity;
+	if (pos.x < 0 || pos.y < 0 || pos.x >= extent.x || pos.y >= extent.y) {
+		return false;
+	}
+
 	switch (shape) {
 		case Shape::square:
 			return true;
@@ -147,10 +154,22 @@ void Brush::key_press_event(QKeyEvent* event) {
 	}
 }
 
+static WorldEditContext world_context(Brush* brush) {
+	return WorldEditContext {
+		.terrain = map->terrain,
+		.units = map->units,
+		.doodads = map->doodads,
+		.regions = map->regions,
+		.brush = brush,
+		.pathing_map = map->pathing_map,
+	};
+}
+
 void Brush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 	if (event->buttons() == Qt::LeftButton) {
 		if (mode == Mode::placement && (can_place() || event->modifiers() & Qt::ShiftModifier)) {
-			apply(frame_delta);
+			auto ctx = world_context(this);
+			apply(ctx, frame_delta);
 		}
 	}
 }
@@ -172,14 +191,16 @@ void Brush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	} else if (mode == Mode::placement) {
 		// Check if eligible for placement
 		if (event->button() == Qt::LeftButton) {
-			apply_begin();
+			auto ctx = world_context(this);
+			apply_begin(ctx);
 			if (can_place() || event->modifiers() & Qt::ShiftModifier) {
-				apply(0.5);
+				apply(ctx, 0.5);
 			}
 		}
 	} else if (mode == Mode::pasting && (can_place() || event->modifiers() & Qt::ShiftModifier)) {
 		clear_selection();
-		place_clipboard();
+		auto ctx = world_context(this);
+		place_clipboard(ctx);
 		mode = Mode::selection;
 	}
 }
@@ -189,7 +210,8 @@ void Brush::mouse_release_event(QMouseEvent* event) {
 		selection_started = false;
 	} else if (mode == Mode::placement) {
 		if (event->button() == Qt::LeftButton) {
-			apply_end();
+			auto ctx = world_context(this);
+			apply_end(ctx);
 		}
 	}
 }

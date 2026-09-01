@@ -17,6 +17,10 @@ import Units;
 import SkinnedMesh;
 import PathingTexture;
 import UnitsUndo;
+import WorldUndoManager;
+import RenderManager;
+import Terrain;
+import PathingMap;
 import Skeleton;
 
 class UnitBrush : public Brush {
@@ -44,7 +48,14 @@ class UnitBrush : public Brush {
 	glm::vec3 drag_start;
 	std::vector<glm::vec2> drag_offsets;
 
-	UnitBrush();
+	UnitBrush(Units& units, Terrain& terrain, PathingMap& pathing_map,
+		  RenderManager& render_manager, WorldUndoManager& world_undo);
+
+	Units& units;
+	Terrain& terrain;
+	PathingMap& pathing_map;
+	RenderManager& render_manager;
+	WorldUndoManager& world_undo;
 
 	void set_shape(const Shape new_shape) override;
 
@@ -58,11 +69,11 @@ class UnitBrush : public Brush {
 	void copy_selection() override;
 	void cut_selection() override;
 	void clear_selection() override;
-	void place_clipboard() override;
+	void place_clipboard(WorldEditContext& ctx) override;
 
-	void apply_begin() override;
-	void apply(double frame_delta) override;
-	void apply_end() override;
+	void apply_begin(WorldEditContext& ctx) override;
+	void apply(WorldEditContext& ctx, double frame_delta) override;
+	void apply_end(WorldEditContext& ctx) override;
 	void render_brush() override;
 	void render_selection() const override;
 	void render_clipboard() override;

@@ -5,6 +5,15 @@ module MDX;
 import std;
 
 namespace mdx {
+	namespace {
+		/// A particle emitter texture grid dimension is only usable if it is a non-zero power of two.
+		/// The game splits an atlas cell index into a row and a column with a shift and a mask rather
+		/// than a divide, so anything else makes the grid meaningless to it.
+		bool is_usable_grid_dimension(const uint32_t value) {
+			return value != 0 && (value & (value - 1)) == 0;
+		}
+	}
+
 	/// Returns false is the model has errors so severe that it cannot be displayed at all
 	bool MDX::is_valid() {
 		bool is_valid = true;
@@ -12,37 +21,103 @@ namespace mdx {
 		const size_t node_count = bones.size() + lights.size() + help_bones.size() + attachments.size() + emitters1.size()
 			+ emitters2.size() + ribbons.size() + event_objects.size() + collision_shapes.size() + corn_emitters.size();
 
-		// Check for missing/incorrect/duplicate Node IDs
+		// Node IDs must be exactly the permutation 0..node_count-1, with no node parenting itself or a node that does not exist.
 		{
-			int64_t sum = 0;
-			int64_t sum_squared = 0;
+			std::vector<bool> seen(node_count, false);
+			std::vector<int> parent_of(node_count, -1);
+			bool structure_ok = true; // ids a permutation and every parent in range: the cycle walk needs both
+
 			for_each_node([&](const Node& node) {
-				if (node.id < 0 || node.id >= node_count) {
+				if (node.id < 0 || static_cast<size_t>(node.id) >= node_count || seen[node.id]) {
 					is_valid = false;
+					structure_ok = false;
+					return;
 				}
+				seen[node.id] = true;
+				parent_of[node.id] = node.parent_id;
 
-				if (node.parent_id < -1) {
+				if (node.parent_id < -1 || (node.parent_id >= 0 && static_cast<size_t>(node.parent_id) >= node_count)) {
 					is_valid = false;
+					structure_ok = false;
 				}
-
-				if (node.parent_id >= 0 && node.parent_id >= node_count) {
-					is_valid = false;
-				}
-
 				if (node.parent_id == node.id) {
 					is_valid = false;
 				}
-
-				sum += node.id;
-				sum_squared += static_cast<int64_t>(node.id) * node.id;
 			});
-			const int64_t correct_sum = node_count * (node_count - 1) / 2;
-			const int64_t correct_sum_squared = (node_count - 1) * node_count * (2 * node_count - 1) / 6;
-			is_valid = is_valid && sum == correct_sum && sum_squared == correct_sum_squared;
+
+			// Check for cycles
+			if (structure_ok) {
+				for (size_t start = 0; start < node_count; start++) {
+					int current = parent_of[start];
+					size_t steps = 0;
+					while (current != -1 && steps <= node_count) {
+						current = parent_of[current];
+						steps++;
+					}
+					if (steps > node_count) {
+						is_valid = false;
+						break;
+					}
+				}
+			}
+		}
+
+		// Bones have to be the first bones.size() node IDs
+		for (const auto& bone : bones) {
+			if (bone.node.id < 0 || static_cast<size_t>(bone.node.id) >= bones.size()) {
+				is_valid = false;
+			}
+		}
+
+		for (const auto& geoset : geosets) {
+			if (geoset.material_id >= materials.size()) {
+				is_valid = false;
+			}
+
+			// Only SD geosets skin through the matrix groups
+			if (geoset.skin.empty()) {
+				if (geoset.vertex_groups.size() != geoset.vertices.size()) {
+					is_valid = false;
+				}
+
+				// A matrix group of size 0 divides by zero when a vertex's weight is spread across it,
+				// and the group sizes together must not claim more bone indices than MATS holds.
+				size_t matrix_index_total = 0;
+				for (const auto& group_size : geoset.matrix_groups) {
+					if (group_size == 0) {
+						is_valid = false;
+					}
+					matrix_index_total += group_size;
+				}
+				if (matrix_index_total > geoset.matrix_indices.size()) {
+					is_valid = false;
+				}
+			}
+
+			// Boneless models get fixed by the game
+			if (!bones.empty()) {
+				for (const auto& index : geoset.matrix_indices) {
+					if (index >= bones.size()) {
+						is_valid = false;
+					}
+				}
+
+				for (size_t i = 0; i + 8 <= geoset.skin.size(); i += 8) {
+					for (size_t j = 0; j < 4; j++) {
+						// A zero-weight slot is never accumulated, so its index is never dereferenced.
+						if (geoset.skin[i + 4 + j] != 0 && geoset.skin[i + j] >= bones.size()) {
+							is_valid = false;
+						}
+					}
+				}
+			}
 		}
 
 		for (const auto& material : materials) {
 			for (const auto& layer: material.layers) {
+				if (layer.textures.empty()) {
+					is_valid = false;
+				}
 				for (const auto& texture: layer.textures) {
 					if (texture.id >= textures.size()) {
 						is_valid = false;
@@ -52,27 +127,8 @@ namespace mdx {
 		}
 
 		for (const auto& emitter : emitters2) {
-			// HiveWE specific?
-			if (emitter.life_span < 0.0) {
-				is_valid = false;
-			}
-			// HiveWE specific?
-			if (emitter.time_middle < 0.0 || emitter.time_middle > 1.f) {
-				is_valid = false;
-			}
-			// HiveWE specific?
-			if (emitter.rows == 0 || emitter.columns == 0) {
-				is_valid = false;
-			}
+			// The game indexes its texture array with this unchecked, so it reads out of bounds.
 			if (emitter.texture_id >= textures.size()) {
-				is_valid = false;
-			}
-			// HiveWE specific?
-			if (emitter.squirt > 1) {
-				is_valid = false;
-			}
-			// HiveWE specific?
-			if (emitter.tail_length < 0.f) {
 				is_valid = false;
 			}
 		}
@@ -113,8 +169,7 @@ namespace mdx {
 		for_each_node([&](const Node& node) {
 			if (node.id < 0) {
 				error(std::format("Node \"{}\" has invalid ID {}", node.name, node.id));
-			}
-			if (node.id >= node_count) {
+			} else if (static_cast<size_t>(node.id) >= node_count) {
 				error(std::format("Node \"{}\" has ID {} which is higher than node count {}", node.name, node.id, node_count));
 			}
 			const auto [id, inserted] = ids.insert(node.id);
@@ -152,6 +207,12 @@ namespace mdx {
 					}
 					if (texture.slot > 5) {
 						warning(std::format("Material {} layer {} texture uses invalid PBR slot {}", id, layer_id, texture.slot));
+					}
+					for (const auto& track : texture.KMTF.tracks) {
+						if (track.value >= textures.size()) {
+							warning(std::format("Material {} layer {} has an animated texture id {} that is out of range", id, layer_id, track.value));
+							break;
+						}
 					}
 				}
 			}
@@ -201,7 +262,11 @@ namespace mdx {
 				}
 			}
 
-			if (!geoset.vertex_groups.empty() && geoset.vertex_groups.size() != geoset.vertices.size()) {
+			if (geoset.skin.empty()) {
+				if (geoset.vertex_groups.size() != geoset.vertices.size()) {
+					error(std::format("Geoset {} has {} vertex groups but {} vertices", id, geoset.vertex_groups.size(), geoset.vertices.size()));
+				}
+			} else if (!geoset.vertex_groups.empty() && geoset.vertex_groups.size() != geoset.vertices.size()) {
 				warning(std::format("Geoset {} has {} vertex groups but {} vertices", id, geoset.vertex_groups.size(), geoset.vertices.size()));
 			}
 
@@ -305,6 +370,11 @@ namespace mdx {
 			if (has_skinnable_geometry && !used_bones.contains(bone.node.id)) {
 				warning(std::format("Bone {} \"{}\" has no vertices attached", id, bone.node.name));
 			}
+			if (bone.node.id >= 0 && static_cast<size_t>(bone.node.id) >= bones.size()) {
+				error(std::format("Bone {} \"{}\" has object ID {} but the model has {} bones. Warcraft 3 skins only to the "
+								  "first {} object IDs, so vertices attached to this bone will not render",
+					id, bone.node.name, bone.node.id, bones.size(), bones.size()));
+			}
 		}
 
 		// Particle/ribbon emitters
@@ -328,19 +398,14 @@ namespace mdx {
 				error(std::format("Particle emitter 2 \"{}\" has invalid replaceable id {}", emitter.node.name, emitter.replaceable_id));
 			}
 			if (emitter.time_middle < 0.f || emitter.time_middle > 1.f) {
-				severe(std::format("Particle emitter 2 \"{}\" has a time middle {} outside [0, 1]", emitter.node.name, emitter.time_middle));
+				error(std::format("Particle emitter 2 \"{}\" has a time middle {} outside [0, 1]", emitter.node.name, emitter.time_middle));
 			}
+			// A negative one kills every particle on the frame it is born and the emitter shows nothing. Zero is used by game files to disable emitters.
 			if (emitter.life_span < 0.f) {
-				severe(std::format("Particle emitter 2 \"{}\" has a lifespan {} that is negative", emitter.node.name, emitter.life_span));
+				error(std::format("Particle emitter 2 \"{}\" has a negative lifespan {} and emits nothing", emitter.node.name, emitter.life_span));
 			}
-			if (emitter.rows == 0 || emitter.columns == 0) {
-				warning(std::format("Particle emitter 2 \"{}\" has zero rows or columns", emitter.node.name));
-			}
-			if (emitter.squirt > 1) {
-				warning(std::format("Particle emitter 2 \"{}\" has squirt that is {}, should be 0 or 1", emitter.node.name, emitter.squirt));
-			}
-			if (emitter.tail_length < 0.f) {
-				warning(std::format("Particle emitter 2 \"{}\" has tail length that is {}, should be larger than 0", emitter.node.name, emitter.tail_length));
+			if (!is_usable_grid_dimension(emitter.rows) || !is_usable_grid_dimension(emitter.columns)) {
+				severe(std::format("Particle emitter 2 \"{}\" has a {}x{} texture grid, but rows and columns must each be a power of two", emitter.node.name, emitter.rows, emitter.columns));
 			}
 		}
 
@@ -365,14 +430,32 @@ namespace mdx {
 		}
 
 		// Cameras
+		const bool has_portrait = std::ranges::any_of(sequences, [](const Sequence& sequence) {
+			std::string lower = sequence.name;
+			std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return std::tolower(c); });
+			return lower.starts_with("portrait");
+		});
 		for (const auto& camera : cameras) {
 			if (camera.near_clip < 0.f || camera.far_clip <= camera.near_clip) {
 				warning(std::format("Camera \"{}\" has invalid clip planes (near {}, far {})", camera.name, camera.near_clip, camera.far_clip));
 			}
+			if (!has_portrait) {
+				unused(std::format("Camera \"{}\" is never used, the model has no Portrait sequence", camera.name));
+			}
 		}
 
 		// Event objects
+		static const std::array<std::string_view, 5> event_prefixes = { "SPN", "SPLT", "FPT", "UBR", "SND" };
 		for (const auto& event : event_objects) {
+			std::string upper_name = event.node.name;
+			std::ranges::transform(upper_name, upper_name.begin(), [](unsigned char c) { return std::toupper(c); });
+			const bool known_prefix = std::ranges::any_of(event_prefixes, [&](const std::string_view prefix) {
+				return upper_name.starts_with(prefix);
+			});
+			if (upper_name.size() != 8 || !known_prefix) {
+				warning(std::format("Event object \"{}\" does not follow the 8 character type + rawcode naming convention", event.node.name));
+			}
+
 			if (event.global_sequence_id != -1 && static_cast<size_t>(event.global_sequence_id) >= global_sequences.size()) {
 				warning(std::format("Event object \"{}\" references invalid global sequence id {}", event.node.name, event.global_sequence_id));
 			}
@@ -394,21 +477,34 @@ namespace mdx {
 		}
 
 		// Animation tracks
-		for_each_track([&](const auto& header) {
-			if (header.global_sequence_ID != -1
-				&& (header.global_sequence_ID < 0 || static_cast<size_t>(header.global_sequence_ID) >= global_sequences.size())) {
-				warning(std::format("A track references invalid global sequence id {}", header.global_sequence_ID));
+		for_each_track_labelled([&](const auto& header, const std::string_view owner, const char* track_name) {
+			const bool valid_global_sequence = header.global_sequence_ID != -1
+				&& header.global_sequence_ID >= 0
+				&& static_cast<size_t>(header.global_sequence_ID) < global_sequences.size();
+
+			if (header.global_sequence_ID != -1 && !valid_global_sequence) {
+				warning(std::format("{} track {} references invalid global sequence id {}", owner, track_name, header.global_sequence_ID));
+			}
+
+			if (valid_global_sequence) {
+				const uint32_t duration = global_sequences[header.global_sequence_ID];
+				for (const auto& track : header.tracks) {
+					if (track.frame > static_cast<int32_t>(duration)) {
+						warning(std::format("{} track {} has a keyframe at frame {} past global sequence {}'s duration {}, which is never reached", owner, track_name, track.frame, header.global_sequence_ID, duration));
+						break;
+					}
+				}
 			}
 
 			bool order_reported = false;
 			bool duplicate_reported = false;
 			for (size_t i = 1; i < header.tracks.size(); i++) {
 				if (!order_reported && header.tracks[i].frame < header.tracks[i - 1].frame) {
-					severe(std::format("A track has keyframes that are not in ascending order (frame {} after {})", header.tracks[i].frame, header.tracks[i - 1].frame));
+					severe(std::format("{} track {} has keyframes that are not in ascending order (frame {} after {})", owner, track_name, header.tracks[i].frame, header.tracks[i - 1].frame));
 					order_reported = true;
 				}
 				if (!duplicate_reported && header.tracks[i].frame == header.tracks[i - 1].frame) {
-					warning(std::format("A track has a duplicate keyframe at frame {}", header.tracks[i].frame));
+					warning(std::format("{} track {} has a duplicate keyframe at frame {}", owner, track_name, header.tracks[i].frame));
 					duplicate_reported = true;
 				}
 			}
@@ -498,27 +594,32 @@ namespace mdx {
 		std::unordered_set<uint32_t> used_textures;
 		std::unordered_set<uint32_t> used_materials;
 		std::unordered_set<uint32_t> used_texture_animations;
-		for (const auto& material : materials) {
-			for (const auto& layer : material.layers) {
+		for (const auto& geoset : geosets) {
+			used_materials.insert(geoset.material_id);
+		}
+		for (const auto& ribbon : ribbons) {
+			used_materials.insert(ribbon.material_id);
+		}
+		for (const auto& [id, material] : std::ranges::enumerate_view(materials)) {
+			if (!used_materials.contains(static_cast<uint32_t>(id))) {
+				continue;
+			}
+			for (const auto& [layer_id, layer] : std::ranges::enumerate_view(material.layers)) {
 				if (layer.texture_animation_id != 0xFFFFFFFF) {
 					used_texture_animations.insert(layer.texture_animation_id);
 				}
 				for (const auto& texture : layer.textures) {
 					used_textures.insert(texture.id);
 					for (const auto& track : texture.KMTF.tracks) {
-						used_textures.insert(track.value);
+						if (track.value < textures.size()) {
+							used_textures.insert(track.value);
+						}
 					}
 				}
 			}
 		}
 		for (const auto& emitter : emitters2) {
 			used_textures.insert(emitter.texture_id);
-		}
-		for (const auto& geoset : geosets) {
-			used_materials.insert(geoset.material_id);
-		}
-		for (const auto& ribbon : ribbons) {
-			used_materials.insert(ribbon.material_id);
 		}
 		for (size_t i = 0; i < textures.size(); i++) {
 			if (!used_textures.contains(static_cast<uint32_t>(i))) {
@@ -536,10 +637,38 @@ namespace mdx {
 			}
 		}
 
+		// Names and paths that MDL cannot represent. This works fine until you export from MDX to MDL
+		const auto check_quoting = [&](const std::string_view kind, const std::string_view text) {
+			if (text.contains('"') || text.contains('\n') || text.contains('\r')) {
+				warning(std::format("{} \"{}\" contains a quote or newline, which cannot be written to MDL", kind, text));
+			}
+		};
+
+		check_quoting("Model", name);
+		for_each_node([&](const Node& node) {
+			check_quoting("Node", node.name);
+		});
+		for (const auto& sequence : sequences) {
+			check_quoting("Sequence", sequence.name);
+		}
+		for (const auto& texture : textures) {
+			check_quoting("Texture path", texture.file_name.string());
+		}
+		for (const auto& camera : cameras) {
+			check_quoting("Camera", camera.name);
+		}
+		for (const auto& attachment : attachments) {
+			check_quoting("Attachment path", attachment.path);
+		}
+		for (const auto& emitter : emitters1) {
+			check_quoting("Particle emitter path", emitter.path);
+		}
+
 		return messages;
 	}
 
 	/// Fixes errors in models that the game tolerates
+	/// The model should successfully pass MDX::is_valid() before calling this
 	void MDX::fix_up() {
 		// Remove geoset animations that reference non-existing geosets
 		for (size_t i = animations.size(); i-- > 0;) {
@@ -551,12 +680,37 @@ namespace mdx {
 		size_t node_count = bones.size() + lights.size() + help_bones.size() + attachments.size() + emitters1.size() + emitters2.size()
 			+ ribbons.size() + event_objects.size() + collision_shapes.size() + corn_emitters.size();
 
-		// If there are no bones we have to add one to prevent crashing and stuff.
+		// The game adds a bone when there are none
 		if (bones.empty()) {
+			// Bones have to precede all other node types, so move the others
+			if (node_count > 0) {
+				for_each_node([](Node& node) {
+					node.id += 1;
+					if (node.parent_id != -1) {
+						node.parent_id += 1;
+					}
+				});
+				if (!pivots.empty()) {
+					pivots.insert(pivots.begin(), glm::vec3(0.f));
+				}
+			}
+
 			Bone bone {};
 			bone.node.parent_id = -1;
-			bone.node.id = node_count++;
+			bone.node.id = 0;
 			bones.push_back(bone);
+			node_count += 1;
+
+			// And all vertices should refer to bone 0 now
+			for (auto& geoset : geosets) {
+				std::ranges::fill(geoset.matrix_indices, 0);
+				for (size_t i = 0; i + 8 <= geoset.skin.size(); i += 8) {
+					geoset.skin[i + 0] = 0;
+					geoset.skin[i + 1] = 0;
+					geoset.skin[i + 2] = 0;
+					geoset.skin[i + 3] = 0;
+				}
+			}
 		}
 
 		// ———————————No sequences?———————————
@@ -589,6 +743,23 @@ namespace mdx {
 			);
 		}
 
+		// Ensure that the pivot buffer is big enough. Everything below indexes pivots by node id.
+		pivots.resize(node_count, {});
+
+		std::unordered_set<int> node_ids;
+		node_ids.reserve(node_count);
+		for_each_node([&](const Node& node) {
+			node_ids.insert(node.id);
+		});
+
+		// Missing parent node becomes root, so walking up a hierarchy always terminates
+		// TODO what is the game's behaviour
+		for_each_node([&](Node& node) {
+			if (node.parent_id != -1 && !node_ids.contains(node.parent_id)) {
+				node.parent_id = -1;
+			}
+		});
+
 		// Can't have zero-sized extents unless you're rendering nothing!
 		if (extent.minimum == glm::vec3(0.f) && extent.maximum == glm::vec3(0.f)) {
 			calculate_extents();
@@ -606,28 +777,13 @@ namespace mdx {
 			return a.start_frame < b.start_frame;
 		});
 
-		// Ensure that the pivot buffer is big enough
-		pivots.resize(node_count, {});
-
-		// Compact node IDs
-		std::vector<int> IDs;
-		IDs.reserve(node_count);
-		for_each_node([&](const Node& node) {
-			IDs.push_back(node.id);
-		});
-
-		const int max_id = *std::max_element(IDs.begin(), IDs.end());
-		std::vector<int> remapping(max_id + 1);
-		for (size_t i = 0; i < IDs.size(); i++) {
-			remapping[IDs[i]] = i;
-		}
-
-		for_each_node([&](mdx::Node& node) {
-			node.id = remapping[node.id];
-			if (node.parent_id != -1) {
-				node.parent_id = remapping[node.parent_id];
+		for (auto& emitter : emitters2) {
+			// Needs to be power of two or otherwise defaults to 1
+			if (!is_usable_grid_dimension(emitter.rows) || !is_usable_grid_dimension(emitter.columns)) {
+				emitter.rows = 1;
+				emitter.columns = 1;
 			}
-		});
+		}
 
 		// Fix vertex groups that reference non-existent matrix groups
 		for (auto& i : geosets) {

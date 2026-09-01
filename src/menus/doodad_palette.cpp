@@ -49,7 +49,8 @@ import Tileset;
 
 namespace fs = std::filesystem;
 
-DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
+DoodadPalette::DoodadPalette(QWidget* parent)
+	: Palette(parent), brush(map->doodads, map->terrain, map->pathing_map, map->render_manager, map->world_undo) {
 	ui.setupUi(this);
 	setAttribute(Qt::WA_DeleteOnClose);
 	show();

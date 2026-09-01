@@ -15,7 +15,8 @@ import Tileset;
 
 namespace fs = std::filesystem;
 
-ScenarioInfoEditor::ScenarioInfoEditor(QWidget* parent) : QDialog(parent) {
+ScenarioInfoEditor::ScenarioInfoEditor(QWidget* parent)
+	: QDialog(parent), info(map->info), trigger_strings(map->trigger_strings) {
     ui.setupUi(this);
     setAttribute(Qt::WA_DeleteOnClose);
     
@@ -102,7 +103,7 @@ ScenarioInfoEditor::ScenarioInfoEditor(QWidget* parent) : QDialog(parent) {
 
 	ui.playerGrid->setVerticalSpacing(0);
 
-	for (const auto& player: map->info.players) {
+	for (const auto& player: info.players) {
 		
 		switch (player.type) {
 		case PlayerType::human:
@@ -119,7 +120,7 @@ ScenarioInfoEditor::ScenarioInfoEditor(QWidget* parent) : QDialog(parent) {
 			break;
 		}
 
-		player_rows[player.internal_number].name->setText(QString::fromUtf8(map->trigger_strings.string(player.name)));
+		player_rows[player.internal_number].name->setText(QString::fromUtf8(trigger_strings.string(player.name)));
 		player_rows[player.internal_number].name->setEnabled(true);
 
 		switch (player.race) {
@@ -183,8 +184,8 @@ bool ScenarioInfoEditor::save() const {
 
 		int found_index = -1;
 
-		for (size_t i = 0; i < map->info.players.size(); i++) {
-			if (map->info.players[i].internal_number == slot) {
+		for (size_t i = 0; i < info.players.size(); i++) {
+			if (info.players[i].internal_number == slot) {
 				found_index = i;
 				break;
 			}
@@ -192,7 +193,7 @@ bool ScenarioInfoEditor::save() const {
 
 		if (controller_type == ControllerType::none) {
 			if (found_index != -1) {
-				map->info.players.erase(map->info.players.begin() + found_index);
+				info.players.erase(info.players.begin() + found_index);
 			}
 			continue;
 		}
@@ -200,7 +201,7 @@ bool ScenarioInfoEditor::save() const {
 		// Controller is not None and we didn't an existing player
 		// Creating a new player data
 		if (found_index == -1) {
-			auto& new_player = map->info.players.emplace_back();
+			auto& new_player = info.players.emplace_back();
 			
 			new_player.internal_number = slot;
 			new_player.type = PlayerType::human;
@@ -213,10 +214,10 @@ bool ScenarioInfoEditor::save() const {
 			new_player.enemy_low_priorities_flags = 0;
 			new_player.enemy_high_priorities_flags = 0;
 
-			found_index = map->info.players.size()-1;
+			found_index = info.players.size()-1;
 		}
 
-		auto& p = map->info.players[found_index];
+		auto& p = info.players[found_index];
 
 		switch (controller_type) {
 		case 1:
@@ -233,7 +234,7 @@ bool ScenarioInfoEditor::save() const {
 			break;
 		}
 
-		map->trigger_strings.set_string(p.name, player_rows[slot].name->text().toStdString());
+		trigger_strings.set_string(p.name, player_rows[slot].name->text().toStdString());
 
 		switch (player_rows[slot].race->currentIndex()) {
 		case 0:

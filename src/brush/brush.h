@@ -11,6 +11,8 @@
 
 import Shader;
 
+struct WorldEditContext;
+
 class Brush: public QObject {
 	Q_OBJECT
 
@@ -45,7 +47,7 @@ class Brush: public QObject {
 
 	virtual void switch_mode();
 
-	Mode get_mode() {
+	Mode get_mode() const {
 		return mode;
 	}
 
@@ -65,7 +67,7 @@ class Brush: public QObject {
 
 	virtual void clear_selection() {}
 
-	virtual void place_clipboard() {}
+	virtual void place_clipboard(WorldEditContext& ctx) {}
 
 	virtual void clear_clipboard() {}
 
@@ -82,11 +84,11 @@ class Brush: public QObject {
 		return true;
 	}
 
-	virtual void apply_begin() {}
+	virtual void apply_begin(WorldEditContext& ctx) {}
 
-	virtual void apply(double frame_delta) = 0;
+	virtual void apply(WorldEditContext& ctx, double frame_delta) = 0;
 
-	virtual void apply_end() {}
+	virtual void apply_end(WorldEditContext& ctx) {}
 
   protected:
 	Shape shape = Shape::circle;

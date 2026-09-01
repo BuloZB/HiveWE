@@ -8,7 +8,6 @@ import Hierarchy;
 import SLK;
 import Utilities;
 import UnorderedMap;
-import <cassert>;
 
 namespace fs = std::filesystem;
 

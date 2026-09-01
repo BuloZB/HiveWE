@@ -82,7 +82,7 @@ TEST_CASE("Validator: event object references invalid global sequence id") {
 
 TEST_CASE("Validator: track references invalid global sequence id") {
 	const auto messages = validate_fixture("bad_track_globalseq_v800.mdl");
-	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "A track references invalid global sequence id 5"));
+	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "Root track KGTR references invalid global sequence id 5"));
 }
 
 TEST_CASE("Validator: texture has no replaceable id and no path") {
@@ -158,8 +158,15 @@ TEST_CASE("Validator: objects") {
 TEST_CASE("Validator: particle emitter 2") {
 	const auto messages = validate_fixture("emitter2_v800.mdl");
 	CHECK(has_message(messages, mdx::ValidationSeverity::error, "invalid replaceable id 99"));
-	CHECK(has_message(messages, mdx::ValidationSeverity::severe, "time middle"));
-	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "zero rows or columns"));
+	CHECK(has_message(messages, mdx::ValidationSeverity::error, "time middle"));
+	CHECK(has_message(messages, mdx::ValidationSeverity::severe, "0x1 texture grid"));
+}
+
+TEST_CASE("Validator: particle emitter 2 texture grid") {
+	// Rows 3 is non-zero, so only the power-of-two rule catches it.
+	const auto messages = validate_fixture("bad_emitter2_texture_grid_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::severe, "3x2 texture grid"));
+	CHECK(has_message(messages, mdx::ValidationSeverity::error, "negative lifespan"));
 }
 
 TEST_CASE("Validator: event objects") {
@@ -190,6 +197,38 @@ TEST_CASE("Validator: negative extents") {
 	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "Model has negative extents"));
 }
 
+// ——————————————————————— Batch 3 ———————————————————————
+
+TEST_CASE("Validator: texture referenced only by an unused material") {
+	const auto messages = validate_fixture("transitive_unused_texture_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::unused, "Material 0 is never referenced"));
+	CHECK(has_message(messages, mdx::ValidationSeverity::unused, "Texture 0 is never referenced"));
+	CHECK_FALSE(has_message(messages, mdx::ValidationSeverity::unused, "Texture 1 is never referenced"));
+}
+
+TEST_CASE("Validator: camera without a portrait sequence") {
+	const auto messages = validate_fixture("portrait_camera_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::unused, "Camera \"Camera01\" is never used, the model has no Portrait sequence"));
+}
+
+TEST_CASE("Validator: event object name does not follow the convention") {
+	const auto messages = validate_fixture("bad_event_name_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "Event object \"Footstep\" does not follow the 8 character type + rawcode naming convention"));
+	CHECK_FALSE(has_message(messages, mdx::ValidationSeverity::warning, "Event object \"SNDxFOO0\" does not follow"));
+}
+
+TEST_CASE("Validator: keyframe past a global sequence duration") {
+	const auto messages = validate_fixture("globalseq_overrun_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::warning, "PastDuration track KGTR has a keyframe at frame 1500 past global sequence 1's duration 1000"));
+	// A final keyframe sitting exactly on the duration is how a loop is normally closed.
+	CHECK_FALSE(has_message(messages, mdx::ValidationSeverity::severe, "OnDuration track KGTR has a keyframe"));
+}
+
+TEST_CASE("Validator: particle emitter 2 visibility track is validated") {
+	const auto messages = validate_fixture("emitter2_visibility_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::severe, "Sparkles track KP2V has keyframes that are not in ascending order (frame 400 after 800)"));
+}
+
 TEST_CASE("Validator: SD geoset too many vertices (in-memory)") {
 	mdx::MDX model;
 	model.version = 800;
@@ -207,4 +246,15 @@ TEST_CASE("Validator: SD geoset too many vertices (in-memory)") {
 
 	const auto messages = model.validate();
 	CHECK(has_message(messages, mdx::ValidationSeverity::severe, "exceeds the Warcraft 3 limit"));
+}
+
+TEST_CASE("Validator: bone numbered above a helper cannot be skinned to") {
+	const auto messages = validate_fixture("bone_below_helper_v800.mdl");
+	CHECK(has_message(messages, mdx::ValidationSeverity::error,
+		"Bone 0 \"Arm\" has object ID 1 but the model has 1 bones"));
+}
+
+TEST_CASE("Validator: a bone below every other node is accepted") {
+	const auto messages = validate_fixture("nodes_v800.mdl");
+	CHECK(!has_message(messages, mdx::ValidationSeverity::error, "will not render"));
 }

@@ -333,10 +333,10 @@ namespace mdx {
 	}
 
 	void read_BONE(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			mdx.bones.push_back(Bone { 
 				.node = Node(reader, mdx.unique_tracks),
 				.geoset_id = reader.read<int32_t>(),
@@ -362,10 +362,10 @@ namespace mdx {
 	}
 
 	void read_LITE(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			Light light;
 			const size_t node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
@@ -409,18 +409,18 @@ namespace mdx {
 	}
 
 	void read_HELP(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
-		while (reader.position < reader_pos + size) {
+		const size_t chunk_end = reader.position + size;
+		while (reader.position < chunk_end) {
 			mdx.help_bones.push_back(Node(reader, mdx.unique_tracks));
 		}
 	}
 
 	void read_ATCH(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			Attachment attachment;
 			const int node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
@@ -446,10 +446,10 @@ namespace mdx {
 	}
 
 	void read_PREM(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			ParticleEmitter1 emitter;
 			const int node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
@@ -486,10 +486,10 @@ namespace mdx {
 	}
 
 	void read_PRE2(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			ParticleEmitter2 emitter2;
 			const int node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
@@ -553,10 +553,10 @@ namespace mdx {
 	}
 
 	void read_RIBB(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			RibbonEmitter emitter;
 			const int node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
@@ -595,10 +595,10 @@ namespace mdx {
 	}
 
 	void read_EVTS(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			EventObject evt;
 			evt.node = Node(reader, mdx.unique_tracks);
 			reader.advance(4); // read KEVT
@@ -610,10 +610,10 @@ namespace mdx {
 	}
 
 	void read_CLID(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			CollisionShape shape;
 			shape.node = Node(reader, mdx.unique_tracks);
 			shape.type = static_cast<CollisionShape::Shape>(reader.read<uint32_t>());
@@ -648,24 +648,43 @@ namespace mdx {
 	}
 
 	void read_CORN(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			CornEmitter emitter;
 			const int node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
 			emitter.node = Node(reader, mdx.unique_tracks);
-			emitter.data = reader.read_vector<uint8_t>(inclusive_size - (reader.position - node_reader_pos));
+			emitter.life_span = reader.read<float>();
+			emitter.emission_rate = reader.read<float>();
+			emitter.speed = reader.read<float>();
+			emitter.color = reader.read<glm::vec3>();
+			emitter.alpha = reader.read<float>();
+			emitter.replaceable_id = reader.read<uint32_t>();
+			emitter.path = reader.read_string(260);
+			emitter.anim_visibility_guide = reader.read_string(260);
+			while (reader.position < node_reader_pos + inclusive_size) {
+				const TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
+				if (tag == TrackTag::KPPA) {
+					emitter.KPPA = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KPPE) {
+					emitter.KPPE = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KPPV) {
+					emitter.KPPV = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else {
+					std::print("Unknown track tag {}\n", static_cast<uint32_t>(tag));
+				}
+			}
 			mdx.corn_emitters.push_back(std::move(emitter));
 		}
 	}
 
 	void read_CAMS(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			const size_t entry_start = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
 
@@ -696,14 +715,17 @@ namespace mdx {
 
 	void read_BPOS(BinaryReader& reader, MDX& mdx) {
 		const uint32_t size = reader.read<uint32_t>();
-		mdx.bind_poses = reader.read_vector<float>(reader.read<uint32_t>() * 12);
+		const uint32_t matrix_count = reader.read<uint32_t>();
+		const size_t floats_from_count = static_cast<size_t>(matrix_count) * 12;
+		const size_t floats_from_size = size >= sizeof(uint32_t) ? (size - sizeof(uint32_t)) / sizeof(float) : 0;
+		mdx.bind_poses = reader.read_vector<float>(std::min(floats_from_count, floats_from_size));
 	}
 
 	void read_TXAN(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			const size_t entry_start = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
 

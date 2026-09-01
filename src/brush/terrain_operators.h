@@ -1,5 +1,9 @@
 #pragma once
 
+#include <span>
+
+#include <glm/glm.hpp>
+
 class TerrainBrush;
 class Terrain;
 class TerrainRect;
@@ -15,8 +19,8 @@ class TerrainOperator {
 		set_brush_type(type);
 	}
 
-	virtual void apply_begin(const TerrainRect& area, int center_x, int center_y) = 0;
-	virtual PathingRect apply(const TerrainRect& area, double frame_delta) = 0;
+	virtual void apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) = 0;
+	virtual PathingRect apply(Terrain& terrain, const TerrainRect& area, double frame_delta) = 0;
 	virtual void apply_end(WorldEditContext& ctx, const PathingRect& area) = 0;
 
 	/// Checks whether the operator is active or not
@@ -48,8 +52,8 @@ class HeightOperator: public TerrainOperator {
 
 	HeightOperator(TerrainBrush& brush) : TerrainOperator(brush, Brush::Type::corner) {}
 
-	void apply_begin(const TerrainRect& area, int center_x, int center_y) override;
-	PathingRect apply(const TerrainRect& area, double frame_delta) override;
+	void apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) override;
+	PathingRect apply(Terrain& terrain, const TerrainRect& area, double frame_delta) override;
 	void apply_end(WorldEditContext& ctx, const PathingRect& area) override;
 
   private:
@@ -63,8 +67,8 @@ class TextureOperator: public TerrainOperator {
 
 	TextureOperator(TerrainBrush& brush) : TerrainOperator(brush, Brush::Type::corner) {}
 
-	void apply_begin(const TerrainRect& area, int center_x, int center_y) override;
-	PathingRect apply(const TerrainRect& area, double frame_delta) override;
+	void apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) override;
+	PathingRect apply(Terrain& terrain, const TerrainRect& area, double frame_delta) override;
 	void apply_end(WorldEditContext& ctx, const PathingRect& area) override;
 
   private:
@@ -90,14 +94,14 @@ class CliffOperator: public TerrainOperator {
 
 	std::string cliff_id;
 
-	void apply_begin(const TerrainRect& area, int center_x, int center_y) override;
-	PathingRect apply(const TerrainRect& area, double frame_delta) override;
+	void apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) override;
+	PathingRect apply(Terrain& terrain, const TerrainRect& area, double frame_delta) override;
 	void apply_end(WorldEditContext& ctx, const PathingRect& area) override;
 
-	void check_nearby(const int begx, const int begy, const int i, const int j, TerrainRect& area) const;
-	void update_ramp(const int i, const int j, const int horizontal, const int vertical, TerrainRect& area);
-	PathingRect apply_cliffs(const TerrainRect& area, double frame_delta);
-	PathingRect apply_ramps(const TerrainRect& area, double frame_delta);
+	void check_nearby(Terrain& terrain, const int begx, const int begy, std::span<const glm::ivec2> seeds, TerrainRect& area) const;
+	void update_ramp(Terrain& terrain, const int i, const int j, const int horizontal, const int vertical, TerrainRect& area);
+	PathingRect apply_cliffs(Terrain& terrain, const TerrainRect& area, double frame_delta);
+	PathingRect apply_ramps(Terrain& terrain, const TerrainRect& area, double frame_delta);
 
   private:
 	/// index of the cliff being used
@@ -120,8 +124,8 @@ class CellOperator: public TerrainOperator {
 		remove_hole
 	};
 
-	void apply_begin(const TerrainRect& area, int center_x, int center_y) override;
-	PathingRect apply(const TerrainRect& area, double frame_delta) override;
+	void apply_begin(Terrain& terrain, const TerrainRect& area, int center_x, int center_y) override;
+	PathingRect apply(Terrain& terrain, const TerrainRect& area, double frame_delta) override;
 	void apply_end(WorldEditContext& ctx, const PathingRect& area) override;
 
 	void set_operation_type(cell_operation operation);
@@ -135,7 +139,7 @@ class CellOperator: public TerrainOperator {
 	static constexpr float WATER_HEIGHT = 0.25f;
 
 	/// Returns true if the water is above the ground
-	bool water_above_ground(int corner_id) const;
+	bool water_above_ground(const Terrain& terrain, int corner_id) const;
 
 	float water_height;
 	cell_operation cell_operation_type = cell_operation::add_boundary;
